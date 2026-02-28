@@ -1,0 +1,8 @@
+# Entorno Virtual
+venv/
+
+# Cache 
+__pycache__/
+
+# IDEs
+.vscode/
