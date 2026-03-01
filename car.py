@@ -1,19 +1,33 @@
 # Físicas del juego
 import pygame
+import numpy as np
 
-class CarPhysics:
+# config 
+max_vel = 150 
+min_vel = 30  
+rot = 120  
+accel = 6 
+rev_accel = 2  
+
+brk = 15
+drag = 0.02
+grass = 5.0
+
+px_to_m = 0.3
+
+class Car:
     def __init__(self,x,y,angle = 180):
         self.position = pygame.Vector2(x,y)
         self.velocity = pygame.Vector2()
         self.angle = angle
         
-        self.max_speed = (150 / 3.6) / 0.03
-        self.min_speed = (30 / 3.6) / 0.03
-        self.acceleration = 6 / 0.03
-        self.reverse_acceleration = 2 / 0.03 
-        self.rotation_speed = 120
-        
-    def update(self,action,dt,track):
+        self.max_speed = (max_vel / 3.6) / px_to_m
+        self.min_speed = (min_vel / 3.6) / px_to_m
+        self.acceleration = accel / px_to_m
+        self.reverse_acceleration = rev_accel / px_to_m 
+        self.rotation_speed = rot
+
+    def update(self,action,dt, on_track=True):
         "actions: [w,s,a,d,space], [0,1]"
 
         # control 
@@ -41,7 +55,7 @@ class CarPhysics:
             self.angle -= self.rotation_speed * dt
         
         if brake_input and self.velocity.length() > 0:
-            brake_accel = 15 / 0.03
+            brake_accel = brk / px_to_m
             decel = brake_accel * dt
             if self.velocity.length() > decel:
                 self.velocity -= self.velocity.normalize() * decel
@@ -49,19 +63,19 @@ class CarPhysics:
                 self.velocity = pygame.Vector2()
         
         # fricción
-        self.velocity -= self.velocity * 0.02 * dt  # drag
+        self.velocity -= self.velocity * drag * dt  # drag
 
         if not accel_input and not reverse_input:
-            rolling = 2.0 / 0.03
+            rolling = 2.0 / px_to_m 
             decel = rolling * dt
             if self.velocity.length() > decel:
                 self.velocity -= self.velocity.normalize() * decel
             else:
                 self.velocity = pygame.Vector2()
 
-        if not track.is_inside(self.position.x, self.position.y):
+        if not on_track:  # fuera de pista
             if self.velocity.length() > 0:
-                self.velocity -= self.velocity.normalize() * 5 * dt
+                self.velocity -= self.velocity * 5 * dt
 
         # limite
         if self.velocity.length() > self.max_speed:
