@@ -20,7 +20,6 @@ def run_ai_lap():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
         action, _states = model.predict(obs, deterministic=True) # el modelo decide
         obs, reward, terminated, truncated, info = env.step(action) # evol
 
@@ -29,16 +28,26 @@ def run_ai_lap():
         screen.blit(track_img, (0,0))
         car = env.car
         car_pos = (int(car.position.x), int(car.position.y))
+
+        # auto
         pygame.draw.circle(screen, (255, 0, 0), car_pos, 5)
+        front_indicator = car.position + pygame.Vector2(10, 5).rotate(-car.angle)
+        pygame.draw.line(screen, (0, 0, 0), car_pos, (front_indicator.x, front_indicator.y), 2)
+        # futuro
+        current_prog = env.track.get_progress(car.position.x, car.position.y)
+        p_future = env.track.get_point_at_dist(current_prog + 150)
+        pygame.draw.circle(screen, (0, 255, 0), (int(p_future.x), int(p_future.y)), 4) # Punto verde
 
         # ojos
-        lidar_angles = [-45, -20, 0, 20, 45]
+        lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
         for i, rel_angle in enumerate(lidar_angles):
-            dist = obs[i+2] * 500 # Des-normalizamos para dibujar
+            dist = obs[i+7] * 500 # Des-normalizamos para dibujar
             angle = np.radians(-(car.angle + rel_angle))
-            end_x = car.position.x + dist * np.cos(angle)
-            end_y = car.position.y + dist * np.sin(angle)
-            pygame.draw.line(screen, (255, 0, 0), car_pos, (end_x, end_y), 1)
+            start_x = car.position.x + 10 * np.cos(np.radians(-car.angle))
+            start_y = car.position.y + 10 * np.sin(np.radians(-car.angle))
+            end_x = start_x + dist * np.cos(angle)
+            end_y = start_y + dist * np.sin(angle)
+            pygame.draw.line(screen, (255, 0, 0), (start_x, start_y), (end_x, end_y), 1)
 
         pygame.display.flip()
         clock.tick(60) 
@@ -47,6 +56,9 @@ def run_ai_lap():
             print(f"Fin del intento. Recompensa acumulada: {reward}")
             obs, _ = env.reset()
 
+        env.track.record_telemetry(env.step_count, [bool(a) for a in action], car)
+
+    env.track.export_telemetry("data/last_run.csv") 
     pygame.quit()
 
 if __name__ == "__main__":

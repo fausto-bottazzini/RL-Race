@@ -11,7 +11,7 @@ model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003, device="auto")
 
 # Entrenamiento
 print("Empezando entrenamiento")
-model.learn(total_timesteps=100000)
+model.learn(total_timesteps=500000)
 
 # guardar
 model.save("data/ppo_track_agent")

@@ -1,6 +1,7 @@
 # Circuito
 import numpy as np
 import pandas as pd
+import pygame
 from scipy.ndimage import distance_transform_edt, gaussian_filter1d
 from skimage.measure import find_contours
 from skimage import io
@@ -84,6 +85,49 @@ class Track:
         x_idx = int(np.clip(x, 0, self.width-1))
         y_idx = int(np.clip(y, 0, self.height-1))
         return self.sdf[y_idx, x_idx]
+
+    def get_track_direction(self, x, y):
+        current_progress = self.get_progress(x, y) 
+        look_ahead = (current_progress + 20) % self.total_length 
+        
+        p1 = self.get_point_at_dist(current_progress) 
+        p2 = self.get_point_at_dist(look_ahead)
+        
+        angle_rad = np.arctan2(p2.y - p1.y, p2.x - p1.x)
+        return np.degrees(angle_rad)
+
+    def get_point_at_dist(self, distance):
+        distance = distance % self.total_length
+        accumulated = 0
+        for i in range(len(self.centerline)):
+            curr_p = self.centerline[i]
+            next_p = self.centerline[(i + 1) % len(self.centerline)]
+            
+            x1, y1 = curr_p[0], curr_p[1]
+            x2, y2 = next_p[0], next_p[1]
+            
+            dx = x2 - x1
+            dy = y2 - y1
+            segment_len = (dx**2 + dy**2)**0.5
+            
+            if accumulated + segment_len >= distance:
+                remaining = distance - accumulated
+                alpha = remaining / segment_len if segment_len > 0 else 0
+                target_x = x1 + dx * alpha
+                target_y = y1 + dy * alpha
+                return pygame.Vector2(target_x, target_y)
+                
+            accumulated += segment_len
+        return pygame.Vector2(self.centerline[0][0], self.centerline[0][1])
+
+    def get_future(self,x,y, look_ahead = 300):
+        current_progress = self.get_progress(x,y)
+        future_prog = (current_progress + look_ahead) % self.total_length
+        p_future = self.get_point_at_dist(future_prog)
+        dx = p_future.x - x
+        dy = p_future.y - y
+        angle_to_future = np.degrees(np.arctan2(dy, dx))
+        return p_future, angle_to_future
 
     # Sectors
     def check_gate_crossing(self, prev_pos, curr_pos, gate):
