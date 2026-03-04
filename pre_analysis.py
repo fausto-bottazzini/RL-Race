@@ -80,7 +80,19 @@ def plot_telemetry(data_path, track_image_path):
 
     plt.show()
 
+def plot_learning_curve(csv_path):
+    df = pd.read_csv(csv_path)
+    plt.figure(figsize=(10,6))
+    plt.plot(df["timesteps"], df["progress"], ".-", label="Progreso por Step")
+    plt.title("Curva de Progreso")
+    plt.xlabel("Timesteps")
+    plt.ylabel("Progreso en pista")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 if __name__ == "__main__":
     # plot_telemetry("best_lap_record.json", "assets/images/tracks/track_1.png")
 
+    plot_learning_curve("data/logs/progress_log.csv")
     plot_telemetry("data/last_run.csv", "assets/track_1-mask.png")

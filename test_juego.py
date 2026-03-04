@@ -64,6 +64,6 @@ while running:
         pygame.draw.line(screen, (255, 0, 0), (car.position.x, car.position.y), (end_x, end_y), 2)
     pygame.display.flip()
 
-track.export_telemetry("data/last_run.csv")  # guardado
+track.export_telemetry("data/guia_test.csv")  # guardado
 pygame.quit()
     

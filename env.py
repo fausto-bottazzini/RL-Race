@@ -1,5 +1,7 @@
 # Entorno 
 import numpy as np
+import pandas as pd
+import ast
 import pygame
 import gymnasium as gym 
 from gymnasium import spaces
@@ -65,6 +67,13 @@ class TrackEnv(gym.Env):
         self.car = None    # necesitamos varios
         self.step_count = 0
 
+        # referencia 
+        df = pd.read_csv("data/guia_test.csv")
+        df["action"] = df["action"].apply(ast.literal_eval) 
+        # x = np.array(df["x"])
+        # y = np.array(df["y"])
+        self.act_ref = np.array(df["action"].tolist())
+
         # acciones
         self.action_space = spaces.MultiBinary(5)  # thr # rev # lft # rgt # brk  
         # inputs                          # [Vel_X, Vel_Y, SDF, Error_Angular, 5 Lidars]
@@ -87,7 +96,7 @@ class TrackEnv(gym.Env):
         old_pos = pygame.Vector2(self.car.position.x, self.car.position.y)
         self.car.update(action, dt=1/60, on_track=on_track)
 
-        # progreso y reward
+        # PROGRESO Y REWARD #
         current_progress = self.track.get_progress(self.car.position.x, self.car.position.y)
         progress_reward = current_progress - self.last_progress # solo si mejora
         
@@ -104,9 +113,8 @@ class TrackEnv(gym.Env):
         if future_curvature > 0.6 and speed_norm > 0.5:
             if action[4]: # frenar antes de la curva
                 reward += 0.02
-            if speed_norm > 0.8: # sigue rapido
+            if speed_norm > 0.8 * speed_norm: # sigue rapido
                 reward -= 0.3 
-
 
         if self.car.velocity.length() > (self.car.max_speed * 0.85):
             reward -= (self.car.velocity.length() / self.car.max_speed) * 0.05
@@ -131,6 +139,13 @@ class TrackEnv(gym.Env):
         if reward < -self.track.total_length / 2: # si se resetea
             reward += 100  # bono por vuelta
         
+        # copiar una vuelta buena 
+        try:
+            aciertos = np.sum(action == self.act_ref[self.step_count,:])   # esto es vago, pero sirve
+            reward += aciertos * 5 
+        except:
+            pass
+    
         self.last_progress = current_progress
         self.step_count += 1
         truncated = self.step_count > 5000 # Límite de tiempo
