@@ -11,7 +11,7 @@ clock = pygame.time.Clock()
 env = TrackEnv(track_mask="assets/track_1-mask.png")
 # selecconar modelo
 # model = PPO.load("data/models/ppo_track_agent")
-model = PPO.load("data/models/ppo_track_v1_100000_steps")
+model = PPO.load("data/models/ppo_track_v1_400000_steps")
 
 track_img = pygame.image.load("assets/track_1-mask.png").convert()
 
@@ -57,7 +57,7 @@ def run_ai_lap():
         clock.tick(60) 
 
         if terminated or truncated:
-            print(f"Fin del intento. Recompensa acumulada: {env.total_ep_prog}")     # ESTO ESTA MAL
+            print(f"Fin del intento. Recompensa acumulada: {env.total_ep_prog}")   
             obs, _ = env.reset()
 
         env.track.record_telemetry(env.step_count, [bool(a) for a in action], car)

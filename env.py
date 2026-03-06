@@ -15,7 +15,7 @@ from track import Track
 # ojos para el modelo
 def get_eyes(track, pos, angle, max_dist = 500):
     "Tira rayos hacia adelante hasta encontrar el borde del circuito"
-    for dist in range(0, max_dist, 1):
+    for dist in range(0, max_dist, 5):   # manejar la resolución de los ojos 5px/paso
         dx = dist * np.cos(np.radians(angle))
         dy = dist * np.sin(np.radians(angle))
         check_x = int(pos.x + dx)
@@ -101,7 +101,7 @@ class TrackEnv(gym.Env):
         obs = get_observation(self.car, self.track)
         on_track = obs[6]
         old_pos = pygame.Vector2(self.car.position.x, self.car.position.y)
-        self.car.update(action, dt=1/60, on_track=on_track)
+        self.car.update(action, dt=1/25, on_track=on_track)  #  1/30 o 25 (no hacen falta tantos fps)
 
         # PROGRESO Y REWARD #
         current_progress = self.track.get_progress(self.car.position.x, self.car.position.y)
@@ -130,15 +130,6 @@ class TrackEnv(gym.Env):
 
         if (action[0] and action[1]) or (action[2] and action[3]):
             reward -= 0.05  # forma no comun de manejar
-
-        # microgestion
-        # future_curvature = abs(obs[4])  #sen_future
-        # speed_norm = self.car.velocity.length() / self.car.max_speed
-        # if future_curvature > 0.6 and speed_norm > 0.5:     
-        #     if action[4]: # frenar antes de la curva
-        #         reward += 0.02
-        #     if speed_norm > 0.8 and not action[4]: # sigue rapido
-        #         reward -= 0.3 
 
         if abs(obs[1]) > 0.5 and progress_diff < 0.01:
             reward -= 0.05   # pensalizacion por derrapar y no avanzar
