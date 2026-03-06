@@ -11,6 +11,7 @@ rev_accel = 2
 
 brk = 15
 drag = 0.02
+lateral_drag = 0.05 # -%
 grass = 5.0
 
 px_to_m = 0.3
@@ -27,7 +28,7 @@ class Car:
         self.reverse_acceleration = rev_accel / px_to_m 
         self.rotation_speed = rot
 
-    def update(self,action,dt, on_track=True):
+    def update(self,action,dt,on_track=True):
         "actions: [w,s,a,d,space], [0,1]"
 
         # control 
@@ -39,6 +40,8 @@ class Car:
 
         forward = pygame.Vector2(1,0).rotate(-self.angle)
         speed_forward = self.velocity.dot(forward)
+        right = pygame.Vector2(0,1).rotate(-self.angle)
+        speed_lateral = self.velocity.dot(right)
 
         # accion
         if accel_input:
@@ -61,9 +64,12 @@ class Car:
                 self.velocity -= self.velocity.normalize() * decel
             else:
                 self.velocity = pygame.Vector2()
-        
+
         # fricción
         self.velocity -= self.velocity * drag * dt  # drag
+
+        # # fricción lateral
+        self.velocity -= right * speed_lateral * lateral_drag
 
         if not accel_input and not reverse_input:
             rolling = 2.0 / px_to_m 

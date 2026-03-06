@@ -25,6 +25,13 @@ axs[0].plot([x_meta, x_meta], [y1,y2], color = "red", linewidth = 3)
 axs[0].plot(cl[:,0], cl[:,1], color="green", label="Centerline")
 axs[0].scatter(cl[0,0], cl[0,1], color="yellow", s=50, label="Meta (S=0)")
 
+X, Y = np.meshgrid(np.arange(0, 799, 25), np.arange(0, 554, 25))
+v_get_direc = np.vectorize(track.get_track_direction) # chequeo de la dirección
+angs = np.radians(v_get_direc(X,Y))
+U = np.cos(angs) * 10
+V = np.sin(angs) * 10
+Q = axs[0].quiver(X, Y, U, -V, color='white', units="width")
+
 # Progreso
 steps = np.arange(len(track.arc_lengths))
 # xx = np.linspace(0,1500,2)

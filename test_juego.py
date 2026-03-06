@@ -56,12 +56,19 @@ while running:
     screen.fill((30,30,30))
     screen.blit(track_image, (0,0))
     pygame.draw.circle(screen,(255,0,0),(int(car.position.x),int(car.position.y)),5)
-    for rel_angle in [-45, -20, 0, 20, 45]:
+
+    for rel_angle in [-90, -45, -20, -10, 0, 10, 20, 45, 90]:
         total_angle = -(car.angle + rel_angle)
         dist = get_eyes(track, car.position, total_angle) * 500
         end_x = car.position.x + dist * np.cos(np.radians(total_angle))
         end_y = car.position.y + dist * np.sin(np.radians(total_angle))
-        pygame.draw.line(screen, (255, 0, 0), (car.position.x, car.position.y), (end_x, end_y), 2)
+        pygame.draw.line(screen, (255, 0, 0), car.position, (end_x, end_y), 2)
+
+    right_indicator = car.position + pygame.Vector2(0,5).rotate(-car.angle)
+    front_indicator = car.position + pygame.Vector2(10,0).rotate(-car.angle)
+    pygame.draw.line(screen, (0, 0, 0), car.position, (front_indicator.x, front_indicator.y), 2)
+    pygame.draw.line(screen, (0, 0, 0), car.position, (right_indicator.x, right_indicator.y), 2)
+
     pygame.display.flip()
 
 track.export_telemetry("data/guia_test.csv")  # guardado

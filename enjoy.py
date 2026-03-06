@@ -9,7 +9,9 @@ screen = pygame.display.set_mode((WIDHT,HEIGHT))
 clock = pygame.time.Clock()
 
 env = TrackEnv(track_mask="assets/track_1-mask.png")
-model = PPO.load("data/ppo_track_agent")
+# selecconar modelo
+# model = PPO.load("data/models/ppo_track_agent")
+model = PPO.load("data/models/ppo_track_v1_100000_steps")
 
 track_img = pygame.image.load("assets/track_1-mask.png").convert()
 
@@ -31,8 +33,7 @@ def run_ai_lap():
 
         # auto
         pygame.draw.circle(screen, (255, 0, 0), car_pos, 5)
-        front_indicator = car.position + pygame.Vector2(10, 5).rotate(-car.angle)
-        pygame.draw.line(screen, (0, 0, 0), car_pos, (front_indicator.x, front_indicator.y), 2)
+
         # futuro
         current_prog = env.track.get_progress(car.position.x, car.position.y)
         p_future = env.track.get_point_at_dist(current_prog + 150)
@@ -43,17 +44,20 @@ def run_ai_lap():
         for i, rel_angle in enumerate(lidar_angles):
             dist = obs[i+7] * 500 # Des-normalizamos para dibujar
             angle = np.radians(-(car.angle + rel_angle))
-            start_x = car.position.x + 10 * np.cos(np.radians(-car.angle))
-            start_y = car.position.y + 10 * np.sin(np.radians(-car.angle))
-            end_x = start_x + dist * np.cos(angle)
-            end_y = start_y + dist * np.sin(angle)
-            pygame.draw.line(screen, (255, 0, 0), (start_x, start_y), (end_x, end_y), 1)
+            end_x = car.position.x + dist * np.cos(angle)
+            end_y = car.position.y + dist * np.sin(angle)
+            pygame.draw.line(screen, (255, 0, 0), car.position, (end_x, end_y), 1)
+
+        right_indicator = car.position + pygame.Vector2(0,5).rotate(-car.angle)
+        front_indicator = car.position + pygame.Vector2(10,0).rotate(-car.angle)
+        pygame.draw.line(screen, (0, 0, 0), car.position, (front_indicator.x, front_indicator.y), 2)
+        pygame.draw.line(screen, (0, 0, 0), car.position, (right_indicator.x, right_indicator.y), 2)
 
         pygame.display.flip()
         clock.tick(60) 
 
         if terminated or truncated:
-            print(f"Fin del intento. Recompensa acumulada: {reward}")
+            print(f"Fin del intento. Recompensa acumulada: {env.total_ep_prog}")     # ESTO ESTA MAL
             obs, _ = env.reset()
 
         env.track.record_telemetry(env.step_count, [bool(a) for a in action], car)

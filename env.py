@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import ast
+import random as rm
 import pygame
 import gymnasium as gym 
 from gymnasium import spaces
@@ -26,16 +27,18 @@ def get_eyes(track, pos, angle, max_dist = 500):
 
 def get_observation(car,track):
     "Toda la información necesaria para manejar"
-    angle_rad = np.radians(-car.angle)
-    cos_a = np.cos(angle_rad)
-    sen_a = np.sin(angle_rad)
+
+    forward = pygame.Vector2(1,0).rotate(-car.angle)
+    right = pygame.Vector2(0,1).rotate(-car.angle)
 
     # vel
-    vel_long = (car.velocity.x * cos_a + car.velocity.y * sen_a) / car.max_speed
-    vel_lat = (-car.velocity.x * sen_a + car.velocity.y * cos_a) / car.max_speed
+    vel_long = car.velocity.dot(forward) / car.max_speed
+    vel_lat = car.velocity.dot(right) / car.max_speed
+
     # ang
-    p_future, angle_to_future = track.get_future(car.position.x, car.position.y, look_ahead = 300)
-    diff_future = (angle_to_future - car.angle + 180) % 360 - 180
+    p_future, angle_to_future = track.get_future(car.position.x, car.position.y, look_ahead = 150)
+    car_angle_pyg = -car.angle # cuidado diferente forma de tomar angulos
+    diff_future = (angle_to_future - car_angle_pyg + 180) % 360 - 180
     cos_future = np.cos(np.radians(diff_future))
     sen_future = np.sin(np.radians(diff_future))
 
@@ -47,6 +50,7 @@ def get_observation(car,track):
     on_track = 1.0 if track.is_inside(car.position.x,car.position.y) else 0.0
     sdf_raw = track.get_lateral_distance(car.position.x, car.position.y)
     sdf_norm = np.clip(sdf_raw / 25, -1, 1)
+
     # ojos
     lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
     distances = []
@@ -55,6 +59,7 @@ def get_observation(car,track):
         total_angle = -(car.angle + rel_angle) # sistema de la pantalla
         d = get_eyes(track, front_pos, total_angle)
         distances.append(d)
+
     observation = np.array([vel_long, vel_lat, alignment, cos_future, sen_future, sdf_norm, on_track, *distances], dtype=np.float32)
     return observation
 
@@ -67,26 +72,28 @@ class TrackEnv(gym.Env):
         self.car = None    # necesitamos varios
         self.step_count = 0
 
-        # referencia 
-        df = pd.read_csv("data/guia_test.csv")
-        df["action"] = df["action"].apply(ast.literal_eval) 
-        # x = np.array(df["x"])
-        # y = np.array(df["y"])
-        self.act_ref = np.array(df["action"].tolist())
-
         # acciones
         self.action_space = spaces.MultiBinary(5)  # thr # rev # lft # rgt # brk  
         # inputs                          # [Vel_X, Vel_Y, SDF, Error_Angular, 5 Lidars]
         self.observation_space = spaces.Box(low=-1, high=1, shape=(16,), dtype=np.float32)
-        self.out_track_timer = None
+        self.out_track_counter = 0
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.car = Car(x=self.track.start_line["x"], y=512)
-        self.step_count = 0
-        self.last_progress = 0
+        if rm.random() < 0.8:     # 80% inicio aleatorio para aprender toda la pista
+            random_progress = rm.uniform(0, self.track.total_length - 1)
+            pos = self.track.get_point_at_dist(random_progress)
+            angle = self.track.get_track_direction(pos.x,pos.y)
+            self.car = Car(x=pos.x, y=pos.y, angle=-angle)
+            self.last_progress = random_progress
+        else:
+            self.car =  Car(x=self.track.start_line["x"], y=512)
+            self.last_progress = 0
 
+        self.total_ep_prog = 0 # para el callback
+        self.step_count = 0
+        self.out_track_counter = 0
         return get_observation(self.car, self.track), {}
 
     def step(self, action):
@@ -98,53 +105,54 @@ class TrackEnv(gym.Env):
 
         # PROGRESO Y REWARD #
         current_progress = self.track.get_progress(self.car.position.x, self.car.position.y)
-        progress_reward = current_progress - self.last_progress # solo si mejora
-        
-        if progress_reward <= 0:
-            reward = -0.01    # quiero o reversa
+        progress_diff = current_progress - self.last_progress # solo si mejora
+    
+        # meta
+        if progress_diff < -self.track.total_length / 2:
+            progress_diff += self.track.total_length
+        elif progress_diff > self.track.total_length / 2:
+            progress_diff -= self.track.total_length
+
+        self.total_ep_prog += progress_diff
+
+        if progress_diff <= 0:
+            reward = -0.05 # no avanzar o reversa
         else:
-            reward = progress_reward * (0.5 + obs[2] * 0.5)  # bonus por alineado
+            reward = progress_diff * (0.5 + obs[2] * 0.5)
 
-        if action[2] and action[3]:
-            reward -= 0.5  # forma no comun de manejar
+        # sdf 
+        if progress_diff > 0:
+            reward += obs[5] * 0.05
 
-        future_curvature = abs(obs[4])  #sen_future
-        speed_norm = self.car.velocity.length() / self.car.max_speed
-        if future_curvature > 0.6 and speed_norm > 0.5:
-            if action[4]: # frenar antes de la curva
-                reward += 0.02
-            if speed_norm > 0.8 * speed_norm: # sigue rapido
-                reward -= 0.3 
+        # vuelta completada
+        if (current_progress - self.last_progress) < -self.track.total_length / 2:
+            reward += 100
 
-        if self.car.velocity.length() > (self.car.max_speed * 0.85):
-            reward -= (self.car.velocity.length() / self.car.max_speed) * 0.05
+        if (action[0] and action[1]) or (action[2] and action[3]):
+            reward -= 0.05  # forma no comun de manejar
 
-        # reward += obs[5]  # sdf
-        if abs(obs[1]) > 0.5 and (current_progress - self.last_progress) < 0.01:
+        # microgestion
+        # future_curvature = abs(obs[4])  #sen_future
+        # speed_norm = self.car.velocity.length() / self.car.max_speed
+        # if future_curvature > 0.6 and speed_norm > 0.5:     
+        #     if action[4]: # frenar antes de la curva
+        #         reward += 0.02
+        #     if speed_norm > 0.8 and not action[4]: # sigue rapido
+        #         reward -= 0.3 
+
+        if abs(obs[1]) > 0.5 and progress_diff < 0.01:
             reward -= 0.05   # pensalizacion por derrapar y no avanzar
 
         # Salirse - 5s 
         terminated = False 
         if not on_track: 
             reward -= 0.5
-            if self.out_track_timer is None:
-                self.out_track_timer = time.time()
-            elif time.time() - self.out_track_timer > 2.0:
+            self.out_track_counter += 1
+            if self.out_track_counter > 120:  # 2s
                 terminated = True
-                reward -= 10.0 
+                reward -= 5.0 
         else:
-            self.out_track_timer = None 
-
-        # meta
-        if reward < -self.track.total_length / 2: # si se resetea
-            reward += 100  # bono por vuelta
-        
-        # copiar una vuelta buena 
-        try:
-            aciertos = np.sum(action == self.act_ref[self.step_count,:])   # esto es vago, pero sirve
-            reward += aciertos * 5 
-        except:
-            pass
+            self.out_track_counter = 0 
     
         self.last_progress = current_progress
         self.step_count += 1

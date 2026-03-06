@@ -92,7 +92,7 @@ def plot_learning_curve(csv_path):
     plt.show()
 
 if __name__ == "__main__":
-    # plot_telemetry("best_lap_record.json", "assets/images/tracks/track_1.png")
 
     plot_learning_curve("data/logs/progress_log.csv")
+    # plot_telemetry("data/guia_test.csv", "assets/track_1-mask.png")
     plot_telemetry("data/last_run.csv", "assets/track_1-mask.png")
