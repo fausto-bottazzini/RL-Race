@@ -1,7 +1,6 @@
 # pruebas de la mask
-
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from track import Track
 
 # cargar pista

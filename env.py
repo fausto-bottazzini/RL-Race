@@ -1,12 +1,9 @@
 # Entorno 
 import numpy as np
-import pandas as pd
-import ast
 import random as rm
 import pygame
 import gymnasium as gym 
 from gymnasium import spaces
-import time
 from car import Car
 from track import Track
 

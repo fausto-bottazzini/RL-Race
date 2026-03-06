@@ -9,9 +9,9 @@ screen = pygame.display.set_mode((WIDHT,HEIGHT))
 clock = pygame.time.Clock()
 
 env = TrackEnv(track_mask="assets/track_1-mask.png")
-# selecconar modelo
+# Selecconar modelo
 # model = PPO.load("data/models/ppo_track_agent")
-model = PPO.load("data/models/ppo_track_v1_400000_steps")
+model = PPO.load("data/models/ppo_track_v2_3000000_steps")
 
 track_img = pygame.image.load("assets/track_1-mask.png").convert()
 
@@ -42,7 +42,7 @@ def run_ai_lap():
         # ojos
         lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
         for i, rel_angle in enumerate(lidar_angles):
-            dist = obs[i+7] * 500 # Des-normalizamos para dibujar
+            dist = obs[i+7] * 500 # Desnormalizar para dibujar
             angle = np.radians(-(car.angle + rel_angle))
             end_x = car.position.x + dist * np.cos(angle)
             end_y = car.position.y + dist * np.sin(angle)

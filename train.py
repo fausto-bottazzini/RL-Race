@@ -1,4 +1,5 @@
 # Modelo 
+import numpy as np
 import pandas as pd
 import os
 from stable_baselines3 import PPO
@@ -24,8 +25,9 @@ class ProgressLoggerCallback(BaseCallback):
     def _on_step(self) -> bool:
         if self.n_calls % self.check_freq == 0:        
             all_progress = self.training_env.get_attr("total_ep_prog")  
-            avg_progress = sum(all_progress) / len(all_progress)
-            self.data.append({"timesteps": self.num_timesteps, "progress": avg_progress})
+            mean_progress = np.mean(all_progress)
+            std_progress = np.std(all_progress)
+            self.data.append({"timesteps": self.num_timesteps, "progress": mean_progress, "std": std_progress})
             pd.DataFrame(self.data).to_csv(self.log_path, index=False)
         return True
 
@@ -44,7 +46,7 @@ def train(model_path = "data/models/ppo_track_v1_400000_steps.zip" ,  total_time
     env = VecMonitor(env) # para trackeo
     
     # Callbakcs
-    checkpoint_callback = CheckpointCallback(save_freq=25000, save_path='./data/models/', name_prefix='ppo_track_v2')
+    checkpoint_callback = CheckpointCallback(save_freq=25000, save_path="./data/models/", name_prefix="ppo_track_v2")
     progress_callback = ProgressLoggerCallback(check_freq=2500, log_path=log_path) 
    
     # Modelo

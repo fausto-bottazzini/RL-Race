@@ -1,6 +1,5 @@
 # Físicas del juego
 import pygame
-import numpy as np
 
 # config 
 max_vel = 150 

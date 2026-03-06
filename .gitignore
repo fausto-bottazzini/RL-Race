@@ -6,3 +6,16 @@ __pycache__/
 
 # IDEs
 .vscode/
+
+# Modelos
+data/manual_test.csv
+data/ppo_tensorboard/
+data/models/ppo_track_v*_steps.zip
+!data/models/ppo_track_v*_100000_steps.zip
+!data/models/ppo_track_v*_300000_steps.zip
+!data/models/ppo_track_v*_500000_steps.zip
+!data/models/ppo_track_v*_1000000_steps.zip
+!data/models/ppo_track_v*_1500000_steps.zip
+!data/models/ppo_track_v*_2000000_steps.zip
+!data/models/ppo_track_v*_2500000_steps.zip
+!data/models/ppo_track_v*_3000000_steps.zip

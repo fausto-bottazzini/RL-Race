@@ -1,10 +1,9 @@
 # Cheuqueo del juego y telemetria 
-
+import numpy as np
 import pygame
 from car import Car
 from track import Track
 
-import numpy as np
 from env import get_eyes
 
 track = Track("assets/track_1-mask.png")
@@ -71,6 +70,6 @@ while running:
 
     pygame.display.flip()
 
-track.export_telemetry("data/guia_test.csv")  # guardado
+track.export_telemetry("data/manual_test.csv")  # guardado
 pygame.quit()
     

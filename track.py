@@ -87,6 +87,7 @@ class Track:
         return self.sdf[y_idx, x_idx]
 
     def get_track_direction(self, x, y):
+        "Obtener angulo del campo tangencial de la centerline"
         current_progress = self.get_progress(x, y) 
         look_ahead = (current_progress + 20) % self.total_length 
         
@@ -97,6 +98,7 @@ class Track:
         return np.degrees(angle_rad)
 
     def get_point_at_dist(self, distance):
+        "Coordenadas de un punto futuro en la centerline"
         distance = distance % self.total_length
         accumulated = 0
         for i in range(len(self.centerline)):
@@ -121,6 +123,7 @@ class Track:
         return pygame.Vector2(self.centerline[0][0], self.centerline[0][1])
 
     def get_future(self,x,y, look_ahead = 300):
+        "Obtener información del circuito delante"
         current_progress = self.get_progress(x,y)
         future_prog = (current_progress + look_ahead) % self.total_length
         p_future = self.get_point_at_dist(future_prog)
@@ -131,9 +134,8 @@ class Track:
 
     # Sectors
     def check_gate_crossing(self, prev_pos, curr_pos, gate):
-        """
-        Detecta si el segmento (prev_pos -> curr_pos) intersecta con la gate ((x1,y1), (x2,y2))
-        """
+        "Detecta si el segmento (prev_pos -> curr_pos) intersecta con la gate ((x1,y1), (x2,y2))"
+
         p1, p2 = np.array(gate[0]), np.array(gate[1])
         a, b = np.array([prev_pos.x, prev_pos.y]), np.array([curr_pos.x, curr_pos.y])
         
@@ -144,12 +146,13 @@ class Track:
         return ccw(a, p1, p2) != ccw(b, p1, p2) and ccw(a, b, p1) != ccw(a, b, p2)
 
     def check_finish_crossing(self, prev_pos, curr_pos):
-        # Simplificado usando la lógica de gates
+        "Chequeo de cruce de meta"
         gate_meta = ((self.start_line["x"], self.start_line["y1"]), 
                      (self.start_line["x"], self.start_line["y2"]))
         return self.check_gate_crossing(prev_pos, curr_pos, gate_meta)
 
     def _resample_closed_curve(self, curve, n_points):
+        "Cerrar la parametrización de la centerline"
         diffs = np.diff(curve, axis=0)
         seg_lengths = np.linalg.norm(diffs, axis=1)
         
