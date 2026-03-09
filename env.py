@@ -60,7 +60,10 @@ def get_observation(car,track):
     observation = np.array([vel_long, vel_lat, alignment, cos_future, sen_future, sdf_norm, on_track, *distances], dtype=np.float32)
     return observation
 
-# Entorno
+#####################
+
+# Primer entrenamietno / Completar una vuelta
+
 class TrackEnv(gym.Env):
     def __init__(self, track_mask):
         super(TrackEnv, self).__init__()
@@ -136,7 +139,7 @@ class TrackEnv(gym.Env):
         if not on_track: 
             reward -= 0.5
             self.out_track_counter += 1
-            if self.out_track_counter > 120:  # 2s
+            if self.out_track_counter > 50:  # 2s
                 terminated = True
                 reward -= 5.0 
         else:
@@ -148,3 +151,122 @@ class TrackEnv(gym.Env):
 
 
         return obs, reward, terminated, truncated, {}
+
+
+#####################
+
+# Segundo entrenamiento / Tiempo de vuelta 
+
+class TrackEnv2(gym.Env):
+    def __init__(self, track_mask):
+        super(TrackEnv2, self).__init__()
+        self.track = Track(track_mask)
+        self.car = None    
+        # acciones
+        self.action_space = spaces.MultiBinary(5)  # thr # rev # lft # rgt # brk  
+        # inputs                          # [Vel_X, Vel_Y, SDF, Error_Angular, 5 Lidars]
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(16,), dtype=np.float32)
+        # tiempo 
+        self.best_lap_time = float("inf")
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+        spawn = pygame.Vector2(495, 512)
+        self.car = Car(x=spawn.x, y=spawn.y, angle=180)
+        # progreso
+        self.last_progress = self.track.get_progress(spawn.x, spawn.y)
+        self.total_ep_prog = 0
+        self.step_count = 0
+        self.out_track_counter = 0
+        # estados de vuelta
+        self.current_lap_time = 0
+        self.lap_counter = 0
+        self.timer_started = False
+        self.sector_times = []
+        self.lap_rewards = 0 ##
+
+        return get_observation(self.car, self.track), {}
+    
+    def step(self, action):
+        obs = get_observation(self.car, self.track)
+        on_track = obs[6]
+        prev_pos = pygame.Vector2(self.car.position.x, self.car.position.y)
+
+        dt = 1/25
+        self.car.update(action, dt=dt, on_track=on_track)
+        curr_pos = self.car.position
+
+        if self.timer_started:
+            self.current_lap_time += dt
+
+        # reward 
+        current_progress = self.track.get_progress(curr_pos.x, curr_pos.y)
+        progress_diff = current_progress - self.last_progress
+
+        # meta
+        if progress_diff < -self.track.total_length / 2:
+            progress_diff += self.track.total_length
+        elif progress_diff > self.track.total_length / 2:
+            progress_diff -= self.track.total_length
+
+        # tiempo de vuelta
+        if self.timer_started:    
+            self.total_ep_prog += progress_diff
+            reward = progress_diff * 1.5
+            # reward -= 0.01  # tiempo 
+        else:
+            reward = progress_diff * 0.5  # los primeros metros hasta que cruce la meta
+            self.total_ep_prog = 0
+
+        # sectores
+        for i, gate in enumerate(self.track.sectors):
+            if self.track.check_gate_crossing(prev_pos, curr_pos, gate):
+                if self.timer_started:
+                    sector_time = self.current_lap_time 
+                    self.sector_times.append(sector_time)
+                    reward += 5.0
+
+        if (action[2] and action[3]): # izq y der
+            reward -= 0.1  # forma no comun de manejar
+
+        terminated = False 
+        info = {}
+        if self.track.check_finish_crossing(prev_pos, curr_pos):
+            if not self.timer_started: # empieza la vuelta cronometrada
+                self.timer_started = True
+                self.current_lap_time = 0
+                self.sector_times = []
+                reward += 10
+            else:  
+                self.lap_counter +=1
+                lap_reward = 60 / (self.current_lap_time + 1) # premio por hacerla rapido
+                reward += lap_reward
+                # print(F"Vuelta terminada, tiempo: {self.current_lap_time:.2f}s")
+                info = {"is_lap_completed": True,
+                         "Lap_time": self.current_lap_time,
+                         "sectors": self.sector_times} 
+
+                if self.current_lap_time < self.best_lap_time:
+                    self.best_lap_time = self.current_lap_time
+                
+                if self.lap_counter > 2:  # primeros metros + warm up + vuelta buena
+                    terminated = True
+                else:
+                    self.current_lap_time = 0
+                    self.sector_times = []
+
+        # Salirse
+        if not on_track: 
+            reward -= 1.0
+            self.out_track_counter += 1
+            if self.out_track_counter > 50:  # 2s
+                terminated = True
+                reward -= 10.0 
+        else:
+            self.out_track_counter = 0 
+
+        self.last_progress = current_progress
+        self.step_count += 1
+        truncated = self.step_count > 10000
+
+        return obs, reward, terminated, truncated, info

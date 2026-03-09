@@ -1,17 +1,17 @@
 import pygame
 import numpy as np
 from stable_baselines3 import PPO
-from env import TrackEnv
+from env import TrackEnv, TrackEnv2
 
 pygame.init()
 WIDHT, HEIGHT = 1080, 720
 screen = pygame.display.set_mode((WIDHT,HEIGHT))
 clock = pygame.time.Clock()
 
-env = TrackEnv(track_mask="assets/track_1-mask.png")
+env = TrackEnv2(track_mask="assets/track_1-mask.png")
 # Selecconar modelo
 # model = PPO.load("data/models/ppo_track_agent")
-model = PPO.load("data/models/ppo_track_v2_3000000_steps")
+model = PPO.load("data/models/ppo_track_v3_600000_steps")
 
 track_img = pygame.image.load("assets/track_1-mask.png").convert()
 
