@@ -24,7 +24,8 @@ def animate(i):
             std = data["std"]
 
             ax1.cla() # Limpiar eje
-            ax1.errorbar(x, y, yerr=std, label="Progreso acumulado (media)", color="#1f77b4", linewidth=2, errorevery=2, capsize=3, elinewidth=1, alpha=0.8)
+            ax1.axhline(3114.2294737798984, color = "red", linestyle = "dashed", alpha = 0.25, label = "Total Length")
+            ax1.errorbar(x, y, yerr=std, label="Progreso acumulado (media)", color="#1f77b4", linewidth=2, elinewidth=1, capsize=3, errorevery=2, alpha=0.8)
             ax1.fill_between(x, y, color="#1f77b4", alpha=0.1)
             
             ax1.set_title("Aprendizaje en Tiempo Real", fontsize=12, fontweight="bold")
@@ -34,35 +35,52 @@ def animate(i):
             ax1.grid(True, linestyle='--', alpha=0.5)
     # Tabla tiempos
     ax2 = plt.subplot(gs[1])
-    ax2.axis("off")
+    ax2.axis('off')
+
     if os.path.exists("data/logs/best_laps.csv"):
         try:
-            laps_df = pd.read_csv("data/logs/best_laps.csv")
+            laps_df = pd.read_csv("data/logs/best_lap.csv")
             if not laps_df.empty:
-                best_lap_row = laps_df.loc[laps_df["lap_time"].idxmin()]
-                tb_data = [
-                    ["MÉTRICA", "TIEMPO"],
-                    ["BEST LAP", format_time(best_lap_row['lap_time'])],
-                    ["", ""], # Separador
-                    ["Sector 1", format_time(best_lap_row.get('s1', 0))],
-                    ["Sector 2", format_time(best_lap_row.get('s2', 0))],
-                    ["Sector 3", format_time(best_lap_row.get('s3', 0))],
-                    ["", ""],
-                    ["Last Step", int(best_lap_row['timestamp'])]
-                ]
+                b_s1 = laps_df["s1"].min()  # records sectores
+                b_s2 = laps_df["s2"].min()
+                b_s3 = laps_df["s3"].min()
+                last_n = laps_df.tail(20).iloc[::-1] # ultimas 20 vueltas 
 
-            table = ax2.table(callText=tb_data, loc="center", cellLoc="center", colWidths=[0.5, 0.5])
-            table.auto_set_font_size(False)
-            table.set_fontsize(10)
-            table.scale(1,2)
+                tb_data = [["STEP / N°", "S1", "S2", "S3", "TOTAL (S4)"]] # header
+                for _, r in last_n.iterrows():
+                    tb_data.append([str(int(r['timestamp'])),
+                        format_time(r.get('s1', 0)),
+                        format_time(r.get('s2', 0)),
+                        format_time(r.get('s3', 0)),
+                        format_time(r['lap_time'])])
 
-            # colores
-            table[(1,1)].set_facecolor("#77e992")
-            ax2.set_title("RÉCORDS DE VUELTA", fontsize=11, fontweight="bold", color="darkred")
+                table = ax2.table(cellText=tb_data, loc="center", cellLoc="center")
+                table.auto_set_font_size(False)
+                table.set_fontsize(8)
+                table.scale(1, 1.3)
+
+                # Colores
+                for (r_idx, c_idx), cell in table.get_celld().items():
+                    if r_idx == 0:  # Encabezado
+                        cell.set_facecolor("#333333")
+                        cell.get_text().set_color("white")
+                        cell.get_text().set_weight('bold')
+                    
+                    elif r_idx > 0:
+                        if r_idx == 1 and (c_idx == 0 or c_idx == 4):  # el ultimo siempre es record
+                            cell.set_facecolor("#98fb98")
+                            if c_idx == 4: cell.get_text().set_weight('bold')             
+                        # Sectores 
+                        current_data = last_n.iloc[r_idx - 1]
+                        if c_idx == 1 and current_data['s1'] <= b_s1: cell.set_facecolor("#e0b0ff")
+                        if c_idx == 2 and current_data['s2'] <= b_s2: cell.set_facecolor("#e0b0ff")
+                        if c_idx == 3 and current_data['s3'] <= b_s3: cell.set_facecolor("#e0b0ff")
+
+                ax2.set_title("Tiempos de Vuelta", fontsize=10, fontweight="bold")
+            else:
+                ax2.text(0.5, 0.5, "Esperando datos...", ha='center')
         except Exception as e:
-            ax2.text(0.5,0.5,f"Error cargando tabla", ha="center")
-    else:
-        ax2.text(0.5, 0.5, "Esperando datos\nde vueltas...", ha='center', alpha=0.5)
+            ax2.text(0.5, 0.5, f"Error: {e}", ha='center', fontsize=7)
     plt.tight_layout()
 
 

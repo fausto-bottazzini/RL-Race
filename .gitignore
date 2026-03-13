@@ -10,12 +10,23 @@ __pycache__/
 # Modelos
 data/manual_test.csv
 data/ppo_tensorboard/
+data/logs/best_laps,csv
+data/logs/progress_log.csv
 data/models/ppo_track_v*_steps.zip
+
 !data/models/ppo_track_v*_100000_steps.zip
-!data/models/ppo_track_v*_300000_steps.zip
+!data/models/ppo_track_v4.2_200000_steps.zip
 !data/models/ppo_track_v*_500000_steps.zip
+!data/models/ppo_track_v*_600000_steps.zip
+!data/models/ppo_track_v5_840168_steps.zip
+!data/models/ppo_track_v5_960252_steps.zip
 !data/models/ppo_track_v*_1000000_steps.zip
-!data/models/ppo_track_v*_1500000_steps.zip
+!data/models/ppo_track_v5_1436604_steps.zip 
+!data/models/ppo_track_v5_1614928_steps.zip
+!data/models/ppo_track_v5_1653784_steps.zio
+!data/models/ppo_track_v5_1807188_steps.zip
 !data/models/ppo_track_v*_2000000_steps.zip
-!data/models/ppo_track_v*_2500000_steps.zip
-!data/models/ppo_track_v*_3000000_steps.zip
+!data/models/ppo_track_v5_2586820_steps.zip
+
+# Otros
+old/

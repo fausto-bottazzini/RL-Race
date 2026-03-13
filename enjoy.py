@@ -10,8 +10,8 @@ clock = pygame.time.Clock()
 
 env = TrackEnv2(track_mask="assets/track_1-mask.png")
 # Selecconar modelo
-# model = PPO.load("data/models/ppo_track_agent")
-model = PPO.load("data/models/ppo_track_v3_600000_steps")
+model = PPO.load("data/models/ppo_T2")
+# model = PPO.load("data/models/ppo_track_v5_2891680_steps")  
 
 track_img = pygame.image.load("assets/track_1-mask.png").convert()
 
@@ -23,6 +23,7 @@ def run_ai_lap():
             if event.type == pygame.QUIT:
                 running = False
         action, _states = model.predict(obs, deterministic=True) # el modelo decide
+        # action, _states = model.predict(obs, deterministic=False) # sigue probando cosas
         obs, reward, terminated, truncated, info = env.step(action) # evol
 
         # render

@@ -7,6 +7,7 @@ from skimage.measure import find_contours
 from skimage import io
 from scipy.spatial import cKDTree 
 
+px_to_m = 0.3
 
 class Track: 
     def __init__(self, track_mask):
@@ -52,7 +53,7 @@ class Track:
         self.total_length = self.arc_lengths[-1]                          #  self.arc_lengths = np.cumsum(seg_lengths)
 
         # Telemetria 
-        self.telemetry = {"step": [], "x": [], "y": [], "action": [], "progress": [], "on_track": []}
+        self.telemetry = {"step": [], "x": [], "y": [], "speed": [], "action": [], "progress": [], "on_track": []}
 
     # Tele
     def record_telemetry(self, step, action, car):
@@ -60,6 +61,7 @@ class Track:
         self.telemetry["step"].append(step)
         self.telemetry["x"].append(car.position.x)
         self.telemetry["y"].append(car.position.y)
+        self.telemetry["speed"].append(car.velocity.length() * px_to_m)
         self.telemetry["action"].append(action)
         self.telemetry["progress"].append(self.get_progress(car.position.x,car.position.y))
         self.telemetry["on_track"].append(self.is_inside(car.position.x,car.position.y))

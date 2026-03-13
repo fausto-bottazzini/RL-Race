@@ -8,6 +8,8 @@ import ast
 from track import Track
 track = Track("assets/track_1-mask.png")
 
+# 3114.2294737798984 (total_length)
+
 x_meta = track.start_line["x"]         # meta
 y1 = track.start_line["y1"]
 y2 = track.start_line["y2"]
@@ -94,6 +96,6 @@ def plot_learning_curve(csv_path):
 if __name__ == "__main__":
 
     # plot_learning_curve("data/logs/3M_progress_log.csv")
-    plot_learning_curve("data/logs/progress_log.csv")
-    # plot_telemetry("data/guia_test.csv", "assets/track_1-mask.png")
+    # plot_learning_curve("data/logs/progress_log.csv")
+    # plot_telemetry("data/manual_test.csv", "assets/track_1-mask.png")
     plot_telemetry("data/last_run.csv", "assets/track_1-mask.png")

@@ -71,6 +71,7 @@ class TrackEnv(gym.Env):
         self.track = Track(track_mask)
         self.car = None    # necesitamos varios
         self.step_count = 0
+        self.rm_spawn = 0.8 # spawn aleatorio 
 
         # acciones
         self.action_space = spaces.MultiBinary(5)  # thr # rev # lft # rgt # brk  
@@ -81,7 +82,7 @@ class TrackEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        if rm.random() < 0.8:     # 80% inicio aleatorio para aprender toda la pista
+        if rm.random() < self.rm_spawn:     # inicio aleatorio para aprender toda la pista
             random_progress = rm.uniform(0, self.track.total_length - 1)
             pos = self.track.get_point_at_dist(random_progress)
             angle = self.track.get_track_direction(pos.x,pos.y)
@@ -152,6 +153,8 @@ class TrackEnv(gym.Env):
 
         return obs, reward, terminated, truncated, {}
 
+    def set_random_spawn(self, p):
+        self.rm_spawn = p 
 
 #####################
 
@@ -182,8 +185,8 @@ class TrackEnv2(gym.Env):
         self.current_lap_time = 0
         self.lap_counter = 0
         self.timer_started = False
+        self.next_sector = 0  # para que no repita sector
         self.sector_times = []
-        self.lap_rewards = 0 ##
 
         return get_observation(self.car, self.track), {}
     
@@ -212,48 +215,61 @@ class TrackEnv2(gym.Env):
         # tiempo de vuelta
         if self.timer_started:    
             self.total_ep_prog += progress_diff
-            reward = progress_diff * 1.5
+            reward = progress_diff * (0.5 + obs[2] * 0.5)  # 1.5 o 4
             # reward -= 0.01  # tiempo 
         else:
-            reward = progress_diff * 0.5  # los primeros metros hasta que cruce la meta
+            reward = progress_diff * 1.5  # los primeros metros hasta que cruce la meta
             self.total_ep_prog = 0
 
-        # sectores
-        for i, gate in enumerate(self.track.sectors):
-            if self.track.check_gate_crossing(prev_pos, curr_pos, gate):
-                if self.timer_started:
-                    sector_time = self.current_lap_time 
-                    self.sector_times.append(sector_time)
-                    reward += 5.0
+        # if obs[2] < 0:   # estar apuntando en la dirección contraria
+        #     reward -= 0.5
 
-        if (action[2] and action[3]): # izq y der
+        # sectores
+        for i in range(len(self.track.sectors)):
+            if self.track.check_gate_crossing(prev_pos, curr_pos, self.track.sectors[i]):
+                if i == self.next_sector:   # chequeo que pase por el sector que tiene que ser
+                    self.next_sector += 1   
+                    self.sector_times.append(self.current_lap_time)
+                    reward += 20.0
+
+                elif i > self.next_sector: # Si se saltea un sector 
+                    reward -= 100
+                    terminated = True 
+                    # print(f"Saltaste al sector {i} sin pasar por el {self.next_sector}.")
+
+        if (action[0] and action[1]) or (action[2] and action[3]): # adelante y atras o izq y der
             reward -= 0.1  # forma no comun de manejar
 
-        terminated = False 
+        terminated = False
         info = {}
-        if self.track.check_finish_crossing(prev_pos, curr_pos):
+        if self.track.check_finish_crossing(prev_pos, curr_pos):                
             if not self.timer_started: # empieza la vuelta cronometrada
                 self.timer_started = True
                 self.current_lap_time = 0
+                self.next_sector = 0
                 self.sector_times = []
                 reward += 10
             else:  
-                self.lap_counter +=1
-                lap_reward = 60 / (self.current_lap_time + 1) # premio por hacerla rapido
-                reward += lap_reward
-                # print(F"Vuelta terminada, tiempo: {self.current_lap_time:.2f}s")
-                info = {"is_lap_completed": True,
-                         "Lap_time": self.current_lap_time,
-                         "sectors": self.sector_times} 
+                if len(self.sector_times) == len(self.track.sectors):   # chequeo que haya hecho todos los sectores
+                    self.lap_counter +=1
+                    reward += 60 / (self.current_lap_time + 1) # premio por hacerla rapido
+                    # print(F"Vuelta terminada, tiempo: {self.current_lap_time:.2f}s")
+                    info = {"is_lap_completed": True,
+                            "lap_time": self.current_lap_time,
+                            "sectors": self.sector_times} 
 
-                if self.current_lap_time < self.best_lap_time:
-                    self.best_lap_time = self.current_lap_time
-                
-                if self.lap_counter > 2:  # primeros metros + warm up + vuelta buena
+                    if self.current_lap_time < self.best_lap_time:
+                        self.best_lap_time = self.current_lap_time
+                    
+                    if self.lap_counter > 2:  # primeros metros + warm up + vuelta buena
+                        terminated = True
+                    else:
+                        self.current_lap_time = 0
+                        self.sector_times = []
+                        self.next_sector = 0
+                else: 
+                    reward -= 100  # penalización por saltearse el sector
                     terminated = True
-                else:
-                    self.current_lap_time = 0
-                    self.sector_times = []
 
         # Salirse
         if not on_track: 
