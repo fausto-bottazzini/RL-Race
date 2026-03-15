@@ -76,7 +76,7 @@ class BestLapCheckpointCallback(BaseCallback):
 
                             if current_lap_time < self.last_best_time:
                                 self.last_best_time = current_lap_time
-                                save_name = os.path.join(self.save_dir, f"ppo_track_v5_{actual_step}_steps")
+                                save_name = os.path.join(self.save_dir, f"ppo_t2_chkpt_{actual_step}_steps")
                                 self.model.save(save_name)
 
                 except (Exception, IndexError, ValueError):

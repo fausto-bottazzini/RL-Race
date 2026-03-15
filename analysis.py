@@ -1,68 +1,440 @@
+import os, glob
 import pandas as pd
 import numpy as np
+import pygame
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from matplotlib.lines import Line2D
+from matplotlib import colormaps 
+import imageio
 from stable_baselines3 import PPO
 
-def format_time(t):
+total_length = 3114.2294737798984 # px
+sectores = [((212,109), (193,132)), ((201,396), (201, 368)), ((443, 129), (470, 140))]
+x_meta, y1, y2 = 480, 487, 522
+
+
+def format_time(t): 
     minutes = int(t // 60)
     seconds = int(t % 60)
     millis  = int((t - int(t)) * 1000)
     return f"{minutes:02}:{seconds:02}.{millis:03}"
 
-def get_best_rollout(model_path, env, n_laps=5):
-    "Corre el modelo y devuelve la telemetria de la vuelta mas rápida"
-    model = PPO.load(model_path)
-    best_telemetry = None
+def evaluate_models(models_folder, env, n_tries=3, seed=13):  
+    "Barre los modelos y extrae la telemetria de las mejores vueltas."
+    model_files = sorted(glob.glob(os.path.join(models_folder, "*.zip")))
+    all_telemetries = []
     best_time = float("inf")
+    best_actions = []
+    best_model = ""
 
-    for _ in range(n_laps):
-        obs,_ = env.reset()
-        lap_data = []
-        done = False
-        while not done:
-            action,_ = model.predict(obs, deterministic=False) # son malos deterministas
-            obs. reward, terminated, truncated, info = env.step(action)
+    print(f"Evaluando {len(model_files)} modelos")
+    i = 1
+    for model_path in model_files:
+        print(f"Evaluando {i}/{len(model_files)}")
+        model_name = os.path.basename(model_path).replace(".zip","")
+        model = PPO.load(model_path)
+        best_model_time = float("inf")
+        best_model_telemetry = None
 
-            lap_data.append({"x": env.car.position.x, "y": env.car.position.y,
-                             "speed": env.car.velocity.lenght(),
-                             "progress": env.track.get_progress(env.car.position.x, env.car.position.y),
-                             "action": action})
-            if info.get("is_lap_completed"):
-                if info["lap_time"] < best_time:
-                    best_time = info["lap_time"]
-                    best_telemetry = pd.DataFrame(lap_data)
-                done = True
-            if terminated or truncated: done = True
+        for _ in range(n_tries):
+            obs, info = env.reset(seed=seed)
+            full_episode_data = []
+            action_history = []
+            lap_start_idx = 0
+            done = False
 
-    return best_telemetry, best_time
+            while not done:
+                action, _ = model.predict(obs, deterministic=False) # son malos deterministas
+                obs, reward, terminated, truncated, info = env.step(action)
+                full_episode_data.append({"model_name": model_name, 
+                                 "x": env.car.position.x, "y": env.car.position.y,
+                                 "speed": env.car.velocity.length(),
+                                 "progress": env.track.get_progress(env.car.position.x, env.car.position.y),
+                                 "thr": action[0], "brk": action[4], "rev": action[1]})
+                action_history.append(action)
 
+                if info.get("is_lap_completed"):
+                    current_time = info["lap_time"]
+                    if current_time < best_model_time:
+                        best_model_time = current_time
+                        best_model_telemetry = pd.DataFrame(full_episode_data[lap_start_idx:])
 
-def plot_learning_curve(t1_path, t2_path):
+                        if best_model_time < best_time:
+                            best_time = best_model_time
+                            best_model = model_name
+                            best_actions = list(action_history[lap_start_idx:]) ##
+                    lap_start_idx = len(full_episode_data)
+                if terminated or truncated:
+                    done = True
+
+        if best_model_telemetry is not None:
+            all_telemetries.append(best_model_telemetry)
+        i += 1
+    print(f"\nVuelta Rapida Global: {best_time:.3f}s ({model_name})")
+
+    df_all = pd.concat(all_telemetries, ignore_index=True)
+    df_all.to_csv("data/analysis/all_telemetries.csv", index=False)
+    np.save("data/analysis/best_actions.npy", np.array(best_actions))
+    return df_all, best_actions, best_model
+
+##########
+
+def plot_learning_curve(t1_path, t2_path, t3_path=None, save=False):    
+    "progreso vs timesteps"
     df1 = pd.read_csv(t1_path)
     df2 = pd.read_csv(t2_path)
     
-    offset = df1['timesteps'].max()
-    df2['timesteps'] += offset
-    full_df = pd.concat([df1, df2])
+    # offset1 = df1['timesteps'].max()
+    offset1 = 2e6 - df2['timesteps'].min()
+    df2['timesteps'] += offset1
+    dfs = [df1, df2]
     
+    if t3_path and os.path.exists(t3_path):
+        df3 = pd.read_csv(t3_path)
+        dfs.append(df3)
+
     plt.figure(figsize=(12, 5))
-    plt.fill_between(full_df["timesteps"], full_df["progress"]-full_df["std"], full_df["progress"]+full_df["std"], alpha=0.2, color="blue")
-    plt.plot(full_df["timesteps"], full_df['progress'], color="darkblue", label="Media de Progreso")
-    plt.axvline(x=offset, color="black", linestyle="--", label="Inicio T2")
+    plt.axvline(x=2e6, color="black", linestyle="--", label="Inicio T2")
+    for i in (1,2,3):
+        if i == 1:
+            plt.axhline(y=total_length*i, color="red", linestyle="-", alpha=0.3/i, label="Vueltas Completadas")
+        else: 
+            plt.axhline(y=total_length*i, color="red", linestyle="-", alpha=0.3/i)
+    for df in dfs:
+        plt.fill_between(df["timesteps"], df["progress"]-df["std"], df["progress"]+df["std"], alpha=0.2, color="#0000FF")
+        plt.plot(df["timesteps"], df['progress'], color="darkblue")
+
+    if t3_path:
+        plt.axvline(x=df2['timesteps'].max(), color="red", linestyle="--", label="Inicio T3 (Fine-Tuning)")
+
+    plt.xlabel("Timesteps")
     plt.ylabel("Distancia Recorrida [px]")
-    plt.title("Evolución del Aprendizaje: De Exploración (T1) a Optimización (T2)")
+    plt.title("Evolución del Aprendizaje: Exploración y Optimización Continua")
     plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if save:
+        plt.savefig("plots/learning_curve.png", dpi=300)
+    plt.show()
+
+def plot_lap_times(best_laps_paths, save=False):   
+    "Mejora de los tiempos de vuelta y sectores integrados en una sola figura."
+    df12 = pd.read_csv(best_laps_paths[0])
+    df3 = pd.read_csv(best_laps_paths[1])
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5), gridspec_kw={'width_ratios': [1.8, 1]})
+    gap = (df12['lap_time'].max() - df3['lap_time'].min())
+
+    # Tiempos de Vuelta (Principal)
+    ax1.axvline(x=600000, color="r", alpha=0.3, label="Cambios en el modelo")
+    ax1.axvline(x=1000000, color="r", alpha=0.3)
+    ax1.axvline(x=1600000, color="r", alpha=0.3)
+    
+    ax1.plot(df12['timestamp'], df12['lap_time'], ".-", color='black', linewidth=2, label=f"Mejora total: -{gap:.2f} s")
+    ax1.plot(df3['timestamp'], df3['lap_time'], ".-", color='black', linewidth=2)
+    
+    ax1.legend(loc='upper right')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Tiempo [s]', color='black')
+    ax1.set_title("Evolución General de Tiempos de Vuelta")
+    ax1.grid(True, alpha=0.3)
+
+    # Tiempos de Sectores
+    ax2.axvline(x=600000, color="r", alpha=0.3, label="cambio")
+    ax2.axvline(x=1000000, color="r", alpha=0.3)
+    ax2.axvline(x=1600000, color="r", alpha=0.3)
+
+    # ax2.fill_between([0, 2.9e6], df12['lap_time'].max(), df3['lap_time'].min(), color="grey", alpha=0.2, label=f"Gap: -{gap:.2f} s")
+
+    # Datos df12
+    ax2.plot(df12['timestamp'], df12['lap_time'], ".-", color='black', linewidth=2, label='Tiempo Total (S4)')
+    ax2.plot(df12['timestamp'], df12['s1'], '+-', color="b", label='Sector 1')
+    ax2.plot(df12['timestamp'], df12['s2'], '+-', color="#FFA500", label='Sector 2')
+    ax2.plot(df12['timestamp'], df12['s3'], '+-', color="g", label='Sector 3')
+    # Datos df3
+    ax2.plot(df3['timestamp'], df3['lap_time'], ".-", color='black', linewidth=2)
+    ax2.plot(df3['timestamp'], df3['s1'], 'x-', color="b")
+    ax2.plot(df3['timestamp'], df3['s2'], 'x-', color="#FFA500")
+    ax2.plot(df3['timestamp'], df3['s3'], 'x-', color="g")
+
+    ax2.legend(loc='lower right', fontsize='small')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_title("Desglose por Sectores")
+    ax2.grid(True, alpha=0.3)
+    
+    # plot
+    plt.tight_layout()
+    if save:
+        plt.savefig("plots/lap_times_combined.png", dpi=300)
+    plt.show()
+
+def plot_telemetry_vel(telemetry_df, track_img = "assets/track_1-mask.png", save=False):  
+    "Trazada sobre el circuito, coloreado por velocidad"
+    plt.figure(figsize=(10, 7))   
+    # circuito
+    img = mpimg.imread(track_img)
+    h, w = img.shape[:2]
+    plt.imshow(img, extent=[0, w, h, 0])
+    for s in sectores:  # (xy),(xy)
+        plt.plot((s[0][0], s[1][0]),(s[0][1], s[1][1]), color = "b") 
+    plt.plot([x_meta, x_meta], [y1,y2], color = "red", linewidth = 3) 
+    scatter = plt.scatter(telemetry_df['x'], telemetry_df['y'], c=telemetry_df['speed'], cmap='plasma', s=10, alpha=0.8)
+    plt.colorbar(scatter, label='Velocidad [m/s]')
+    plt.xlabel("Posición X")
+    plt.ylabel("Posición Y")
+    plt.title("Trazada y Mapa de Velocidad")
+    plt.axis('equal')
+    plt.tight_layout()
+    if save: plt.savefig("plots/telemetry_vel.png", dpi=300)
+    plt.show()
+
+def plot_telemetry_act(telemetry_df, track_img = "assets/track_1-mask.png", save=False):  
+    "Trazada sobre el circuito, coloreado por acciones"
+    # data
+    x = telemetry_df["x"].values
+    y = telemetry_df["y"].values
+    thr = telemetry_df["thr"].values
+    brk = telemetry_df["brk"].values
+    rev = telemetry_df["rev"].values
+    tiempo_s = len(telemetry_df) * 1/25
+    tiempo_m = format_time(tiempo_s)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    # circuito
+    img = mpimg.imread(track_img)
+    h, w = img.shape[:2]
+    ax.imshow(img, extent=[0, w, h, 0])
+    for s in sectores:  # (xy),(xy)
+        ax.plot((s[0][0], s[1][0]),(s[0][1], s[1][1]), color = "b") 
+    ax.plot([x_meta, x_meta], [y1,y2], color = "red", linewidth = 3)
+    # actions
+    for i in range(len(x) - 1):
+        color = (brk[i], thr[i], rev[i])
+        if sum(color) == 0:
+            color = (0.5, 0.5, 0.5)
+        else:
+            max_val = max(color)
+            color = tuple(c/max_val for c in color)
+        ax.plot(x[i:i+2], y[i:i+2], color=color, linewidth=2)
+    # estilo
+    ax.text(0.05, 0.95, f"TIEMPO: {tiempo_m}", transform=ax.transAxes, fontsize=10, fontweight='bold', va='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+    custom_lines = [Line2D([0], [0], color='green', lw=2),
+                    Line2D([0], [0], color='red', lw=2),
+                    Line2D([0], [0], color='blue', lw=2),
+                    Line2D([0], [0], color='gray', lw=2)]
+    ax.legend(custom_lines, ['Acelerando', 'Frenando', 'Reversa', 'Inercia'], loc=(0.8,0.8))
+    ax.set_xlabel("Posición X")
+    ax.set_ylabel("Posición Y")
+    ax.set_title("Mejor Trazada")
+    ax.axis('equal')
+    plt.tight_layout()
+    if save: plt.savefig("plots/telemetry_act.png", dpi=300)
+    plt.show()
+
+def plot_telemetry_evol(all_telemetries, step=5, models_folder = "data/models", track_img = "assets/track_1-mask.png", save=False):   
+    # models_folder = "data/analysis/models_to_analyse"  # cambiar si es otra
+
+    rutas_completas = sorted(glob.glob(os.path.join(models_folder, "*.zip")))
+    nombres = [os.path.basename(f).replace(".zip", "") for f in rutas_completas]
+    
+    # reordenar (ver segun la carpeta de modelos)
+    t1, t2, t3 = nombres.pop(0), nombres.pop(0), nombres.pop(0) 
+    nombres.insert(len(nombres)-1, t1) # los movemos al fondo
+    nombres.insert(len(nombres)-1, t2)
+    nombres.insert(len(nombres)-1, t3)
+    # print(nombres)
+    # en caso de que desde un principio se pongan nombre en orden (alfabetico), no hace falta
+
+    model_names = [m for m in nombres if m in all_telemetries['model_name'].unique()]
+    selected_models = model_names[::step]
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+    img = mpimg.imread(track_img)
+    h, w = img.shape[:2]
+    extent = [0, w, h, 0]
+    ax.imshow(img, extent=extent)
+    for s in sectores:  # (xy),(xy)
+        ax.plot((s[0][0], s[1][0]),(s[0][1], s[1][1]), color = "b") 
+    ax.plot([x_meta, x_meta], [y1,y2], color = "red", linewidth = 3)
+
+    norm = plt.Normalize(0, len(selected_models))
+    cmap = colormaps['viridis']
+    for idx, name in enumerate(selected_models):
+        df_model = all_telemetries[all_telemetries['model_name'] == name]
+        if not df_model.empty:
+            ax.plot(df_model["x"], df_model["y"], color=cmap(norm(idx)), alpha=0.6, linewidth=1.5)
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    cbar = fig.colorbar(sm, ax=ax, label='Evolución del Entrenamiento (Modelos)')
+    cbar.set_ticks([])
+
+    ax.set_title("Evolución de la Trazada")
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    if save: plt.savefig("plots/telemetry_evol.png", dpi=300)
+    plt.show()
+
+def plot_speed_profile(telemetry_df, save=False):  
+    "Perfil de velocidad con zonas de frenado/reversa vs progreso en pista."
+    df = telemetry_df[:-1]
+    progress = df["progress"]
+    speed = df["speed"]
+    thr = df["thr"]
+    brk = df["brk"]
+    rev = df["rev"]
+
+    fig, ax1 = plt.subplots(figsize=(12, 5))
+    ax1.plot(progress, speed, color="black", linewidth=1.5, label="Velocidad")
+
+    ax1.fill_between(progress, 0, speed, where=thr, color='green', alpha=0.3, label="Acelerando")
+    ax1.fill_between(progress, 0, speed, where=brk, color='red', alpha=0.3, label="Freno")
+    ax1.fill_between(progress, 0, speed, where=rev, color='blue', alpha=0.3, label="Reversa")
+
+    ax1.axvline(x=total_length, color="k", linestyle="--", alpha=0.3)
+    ax1.set_xlabel("Progreso en pista [px]")
+    ax1.set_ylabel("Velocidad [m/s]")
+    ax1.set_title("Perfil de Velocidad")
+    ax1.legend(loc="upper right")
+    ax1.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    if save: plt.savefig("plots/speed_profile.png", dpi=300)
+    plt.show()
+
+def plot_test_track(all_telemetries, step=5, track_img = "assets/track_1-mask.png", save=False):  
+    from track import Track
+    track = Track(track_img)
+    cl = track.centerline
+
+    model_names = [m for m in all_telemetries['model_name'].unique()]
+    selected_models = model_names[::step]
+
+    fig, axs = plt.subplots(1, 2, figsize=(14, 5), gridspec_kw={'width_ratios': [2, 1]})
+
+    # Circuito
+    axs[0].set_title("Circuito - SDF")
+    axs[0].imshow(track.binary, cmap="gray", alpha=0.3)
+    sdf_plot = axs[0].imshow(track.sdf, cmap="coolwarm", alpha=0.6) # campo SDF
+    plt.colorbar(sdf_plot, ax=axs[0], label="Valor SDF")
+    for s in track.sectors:  # (xy),(xy)
+        axs[0].plot((s[0][0], s[1][0]),(s[0][1], s[1][1]), color = "b") 
+    axs[0].plot([x_meta, x_meta], [y1,y2], color = "red", linewidth = 3)
+    axs[0].plot(cl[:,0], cl[:,1], color="green", label="Centerline")
+    axs[0].scatter(cl[0,0], cl[0,1], color="yellow", s=50, label="Meta (S=0)")
+    axs[0].legend()
+
+    X, Y = np.meshgrid(np.arange(0, 799, 25), np.arange(0, 554, 25))
+    v_get_direc = np.vectorize(track.get_track_direction) # chequeo de la dirección
+    angs = np.radians(v_get_direc(X,Y))
+    U = np.cos(angs) * 10
+    V = np.sin(angs) * 10
+    Q = axs[0].quiver(X, Y, U, -V, color='white', units="width")
+
+    # Progreso
+    steps = np.arange(len(track.arc_lengths))
+    for idx, name in enumerate(selected_models):  # para poder poner varios
+        df_model = all_telemetries[all_telemetries['model_name'] == name]
+        if not df_model.empty:
+            if idx == 0:
+                axs[1].plot(df_model["progress"][:-2].values, color="g", label="Model Progress")
+            else:
+                axs[1].plot(df_model["progress"][:-2].values) # index  (cuidado desfasaje)
+    # xx = np.linspace(0,1500,2)
+    # axs[1].plot(xx,2.1*xx,"r")
+    axs[1].plot(steps, track.arc_lengths, color="blue", label = "Track Progress")
+    axs[1].axhline(y=total_length, color="grey", linestyle="--", alpha=0.3)
+    axs[1].grid()
+    axs[1].set_title("Continuidad del Progreso")
+    axs[1].set_xlabel("Índice del punto")
+    axs[1].set_ylabel("Distancia acumulada (px)")
 
 
-def plot_speed_profile(telemetry_df):
-    plt.figure(figsize=(12, 4))
-    plt.plot(telemetry_df["progress"], telemetry_df["speed"], color="blue", label="Perfil de Velocidad")
-    
-    brakes = telemetry_df[telemetry_df["action"].apply(lambda x: x[4] > 0.5)]
-    plt.plot(brakes["progress"], brakes["speed"], color="red", s=2, label="Frenado")
-    
-    plt.xlabel("Progreso en pista (m)")
-    plt.ylabel("Velocidad (px/s)")
-    plt.title("Análisis de Carga Dinámica")
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def save_lap_gif(env, action_sequence, filename="plots/best_lap.gif", fps=25, seed=13):
+    "GIF de secuencia de acciones ya calculada sin evaluar la red neuronal."
+    frames = []
+    obs, _ = env.reset(seed=seed) 
+    os.environ['SDL_VIDEODRIVER'] = 'dummy'
+    pygame.init()
+    pygame.display.set_mode((1, 1), pygame.NOFRAME)
+    WIDTH, HEIGHT = 1080, 720
+    screen = pygame.Surface((WIDTH, HEIGHT))
+    track_img = pygame.image.load("assets/track_1-mask.png").convert_alpha()
+
+    print(f"Iniciando renderizado del GIF ({len(action_sequence)} pasos)...") 
+    try:
+        for i, action in enumerate(action_sequence):
+            obs, _, term, trunc, info = env.step(action)
+            screen.fill((30, 30, 30))
+            screen.blit(track_img, (0, 0))
+
+            car = env.car
+            pygame.draw.circle(screen, (255, 0, 0), (int(car.position.x), int(car.position.y)), 5)
+            lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
+            for i, rel_angle in enumerate(lidar_angles):
+                dist = obs[i+7] * 500 
+                angle = np.radians(-(car.angle + rel_angle))
+                end = (car.position.x + dist * np.cos(angle), car.position.y + dist * np.sin(angle))
+                pygame.draw.line(screen, (255, 0, 0), car.position, end, 1)
+            right_indicator = car.position + pygame.Vector2(0,5).rotate(-car.angle)
+            front_indicator = car.position + pygame.Vector2(10,0).rotate(-car.angle)
+            pygame.draw.line(screen, (0, 0, 0), car.position, (front_indicator.x, front_indicator.y), 2)
+            pygame.draw.line(screen, (0, 0, 0), car.position, (right_indicator.x, right_indicator.y), 2)
+
+            if i % 1 == 0:
+                frame = pygame.surfarray.array3d(screen)
+                frames.append(np.transpose(frame, (1, 0, 2)))
+
+            if term or trunc: 
+                print(f"Simulación finalizada en paso {i} por colisión/fin.")
+                break 
+
+    finally: 
+        pygame.quit()
+            
+    if frames:
+        print(f"Guardando {len(frames)} frames en {filename}...")
+        imageio.mimsave(filename, frames, fps=fps, loop=0)
+        print("¡GIF guardado con éxito!")
+    else:
+        print("Error: No se generaron frames.")
+
+
+## Plots ## 
+
+if __name__ == "__main__":
+
+    # Gráficos de Entrenamiento #
+    # plot_learning_curve("data/logs/train1.progress.csv", "data/logs/progress_log.csv")
+    # plot_lap_times(["data/logs/best_laps_T2.csv", "data/logs/best_laps.csv"])
+    
+    # Obtener telemetrías #
+    from env import TrackEnv2
+    env = TrackEnv2(track_mask="assets/track_1-mask.png")
+    # all_telems, best_actions, best_model_name = evaluate_models("data/models", env)  # generar las telemetrias
+
+    all_telems = pd.read_csv("data/analysis/all_telemetries.csv") # cargar el archivo
+    best_actions = np.load("data/analysis/best_actions.npy") 
+    best_model_name = all_telems["model_name"].unique()[-1]  # o elegir otro
+    # ppo_track_v5_960252_steps #
+
+    # Gráficos de Telemetría #
+    # modelos_disponibles = all_telems['model_name'].unique()
+    best_telem = all_telems[all_telems['model_name'] == best_model_name]
+
+    # plot_telemetry_evol(all_telems, step=1)
+    # plot_telemetry_act(best_telem)
+    # plot_telemetry_vel(best_telem)
+    # plot_speed_profile(best_telem)
+    plot_test_track(all_telems, step = 5)
+
+    plt.close("all")
+    # # # GIF de la mejor vuelta #
+    # if best_actions is not None:
+    #     save_lap_gif(env, best_actions)
+        
 

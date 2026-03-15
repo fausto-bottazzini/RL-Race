@@ -30,3 +30,7 @@ data/models/ppo_track_v*_steps.zip
 
 # Otros
 old/
+data/analysis/models_to_analyse/
+data/analysis/all_telemetries_short.csv
+data/analysis/best_actions_short.npy
+data/analysis/best_lap_telemetry_short.csv
