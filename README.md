@@ -79,8 +79,11 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
 
 ## Mejór Resultado Obtenido: 
 # Vuelta de 51.6 segundos. 
-![Trayectoria](plots/best_lap_traza.png {width=500px})
-![Telemetría](plots/best_lap_telemetry.png {width=500px})
+
+<div align="center">
+  <img src="plots/best_lap_traza.png" width="500" alt="Trayectoria">
+</div>
+<img src="plots/best_lap_telemetry.png" width="500" alt="Telemetría">
 
 ## 🚀 Instalación y Ejecución
 
@@ -96,19 +99,19 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
    git clone [https://github.com/fausto-bottazzini/RL-Race.git](https://github.com/fausto-bottazzini/RL-Race.git)
    cd RL-Race
 
-1.5. **Crear un entorno (recomendado):**
-```bash
+2. **Crear un entorno (recomendado):**
+    ```bash
     python -m venv venv
     .\venv\Scripts\activate
 
-2. **Instalar dependencias:**
-```bash
+3. **Instalar dependencias:**
+    ```bash
    pip install -r requirements.txt
 
-3. **Entrenar nuevo agente:**
-```bash
+4. **Entrenar nuevo agente:**
+    ```bash
    python train.py
 
-```bash
+    ```bash
    python training_monitoring.py
 
