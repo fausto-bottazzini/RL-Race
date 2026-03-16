@@ -14,12 +14,15 @@ El núcleo del simulador está basado en la lógica de [Juego-Carrera](https://g
 * **Algoritmo PPO:** Implementación con **Stable Baselines3** para el manejo de espacios de acciones continuos.
 * **Telemetría de Datos:** Integración con **Matplotlib** para el análisis de rendimiento durante y despues del entrenamiento.
 
+![Telemetría de Carrera](plots/lap_ppo_T3_51.60s.mp4)
+
 ---
 ## Circuito y Auto
 El circuito se encuentra en binario para poder manejar la logica de fuera de pista. Se calculó una centerline a partír de un Signed Distance Field (SDF), parametrizada de forma continua, para poder calcular el progreso en fomra de arco.
 
 El auto cuenta con una velocidad punta, tanto hacia adelante como en reversa. Al igual que en el juego es un punto. Existe un drag constante y una fuerte resistencia fuera de pista y para las velocidades laterales (limitando el drift)
 
+![Telemetría de Carrera](plots/track.png)
 
 ## Entrenamiento
 El entrenamiento se llevó a cabo de forma paralela en varios nucleos de un procesador.
@@ -40,6 +43,8 @@ En el segundo entrenamiento (optimización) se da mas libertad en la forma de ma
 4. **Castigos varios (-):** No avanzar y accionar botones opuestos. 
 5. **Fuera de pista (-):** Mismo funcionamiento que en el primer entrenamietno. 
  
+> ![Curva de Aprendizaje](plots/T2.png) 
+
 ### Observaciones
 El vector de estado que recibe el modelo incluye:
 * Velocidad actual del vehículo, en la dirección de movimiento y en la perpendicular.
@@ -57,8 +62,7 @@ El rendimiento se evalúa a través de dos métricas principales:
 ### 1. Curva de Aprendizaje 
 Monitoreo del `total_progress` (media entre los varios nucleos), valor del progreso acumulado de cada episodio, y `lap_time`. Un entrenamiento exitoso muestra una convergencia clara donde el agente logra completar varias vueltas de manera seguida y empieza a mejorar los tiempos devuelta
 
-> **Nota:** Aquí puedes insertar el plot de la evolución del entrenamiento.
-> ![Curva de Aprendizaje](plots/T2.png) # learning_curve.png
+> ![Curva de Aprendizaje](plots/learning_curve.png) 
 
 ### 2. Análisis de Telemetría
 Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiendo visualizar:
@@ -66,9 +70,13 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
 * **Perfil de Velocidad:** Dónde acelera y dónde frena el agente en relación con la curvatura de la pista.
 
 ![Evolución de Trayectorias](plots/all_evolución_trazada.png)
-![Telemetría de Carrera](plots/best_lap_telemetry.png)
+
 
 ---
+
+## Mejór Resultado Obtenido
+![Trayectoria](plots/best_lap_traza.png)
+![Telemetría](plots/best_lap_telemetry.png)
 
 ## 🚀 Instalación y Ejecución
 
@@ -83,3 +91,20 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
    ```bash
    git clone [https://github.com/fausto-bottazzini/RL-Race.git](https://github.com/fausto-bottazzini/RL-Race.git)
    cd RL-Race
+
+1.5. **Crear un entorno (recomendado):**
+```bash
+    python -m venv venv
+    .\venv\Scripts\activate
+
+2. **Instalar dependencias:**
+```bash
+   pip install -r requirements.txt
+
+3. **Entrenar nuevo agente:**
+```bash
+   python train.py
+
+```bash
+   python training_monitoring.py
+
