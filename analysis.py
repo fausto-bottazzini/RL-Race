@@ -2,12 +2,13 @@ import os, glob
 import pandas as pd
 import numpy as np
 import pygame
+import imageio
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.lines import Line2D
 from matplotlib import colormaps 
-import imageio
 from stable_baselines3 import PPO
+import cv2
 
 total_length = 3114.2294737798984 # px
 sectores = [((212,109), (193,132)), ((201,396), (201, 368)), ((443, 129), (470, 140))]
@@ -25,7 +26,6 @@ def evaluate_models(models_folder, env, n_tries=3, seed=13):
     model_files = sorted(glob.glob(os.path.join(models_folder, "*.zip")))
     all_telemetries = []
     best_time = float("inf")
-    best_actions = []
     best_model = ""
 
     print(f"Evaluando {len(model_files)} modelos")
@@ -63,7 +63,6 @@ def evaluate_models(models_folder, env, n_tries=3, seed=13):
                         if best_model_time < best_time:
                             best_time = best_model_time
                             best_model = model_name
-                            best_actions = list(action_history[lap_start_idx:]) ##
                     lap_start_idx = len(full_episode_data)
                 if terminated or truncated:
                     done = True
@@ -75,8 +74,161 @@ def evaluate_models(models_folder, env, n_tries=3, seed=13):
 
     df_all = pd.concat(all_telemetries, ignore_index=True)
     df_all.to_csv("data/analysis/all_telemetries.csv", index=False)
-    np.save("data/analysis/best_actions.npy", np.array(best_actions))
-    return df_all, best_actions, best_model
+    return df_all, best_model
+
+def scan_best_lap(model_path, env, n_tries=10, fps=25, seed=13):
+    "Itera un modelo para encontrar su mejor vuelta y graba el gif."
+    model = PPO.load(model_path)
+    model_name = os.path.basename(model_path).replace(".zip", "")
+    
+    best_time = float('inf')
+    best_telemetry = None
+    best_frames = []
+
+    pygame.init()
+    pygame.font.init()
+    font_main = pygame.font.SysFont("monospace", 20, bold=True)
+    font_mono = pygame.font.SysFont("monospace", 14, bold=True)
+    WIDHT, HEIGHT = 1088, 720  #1080
+    screen = pygame.display.set_mode((WIDHT,HEIGHT))
+    track_img = pygame.image.load("assets/track_1-mask.png").convert()
+
+    os.makedirs("data/analysis", exist_ok=True)
+    os.makedirs("plots", exist_ok=True)
+
+    print(f"Buscando la mejor vuelta para {model_name}...")
+    for attempt in range(n_tries):
+        print(f"Run {attempt+1}/{n_tries}")
+        obs, _ = env.reset(seed= seed + attempt) # variable
+        done = False
+        n_lap = 1
+        current_telemetry = []
+        current_frames = []
+
+        while not done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return best_time, best_telemetry
+                
+            action, _ = model.predict(obs, deterministic=False)
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            u_env = env.unwrapped # para leer las variables internas
+            if u_env.timer_started:
+                state_data = {'model_name': model_name,
+                    'x': u_env.car.position.x, 'y': u_env.car.position.y,
+                    'speed': u_env.car.velocity.length(), 'progress': u_env.track.get_progress(u_env.car.position.x, u_env.car.position.y),
+                    'thr': action[0], 'rev': action[1], 'brk': action[4],
+                    'time': u_env.current_lap_time}
+                current_telemetry.append(state_data)
+                
+                # Renderizar y capturar Frame
+                # circuito
+                screen.fill((30, 30, 30))
+                screen.blit(track_img, (0, 0))
+                start_x = u_env.track.start_line["x"]
+                pygame.draw.line(screen, (255, 0, 0), (start_x, u_env.track.start_line["y1"]), (start_x, u_env.track.start_line["y2"]), 3)
+                for s in u_env.track.sectors:
+                    pygame.draw.line(screen, (0, 0, 255), s[0], s[1], 2)
+
+                # auto
+                pygame.draw.circle(screen, (255, 0, 0), (int(u_env.car.position.x), int(u_env.car.position.y)), 5)
+
+                lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
+                for i, rel_angle in enumerate(lidar_angles):
+                    dist = obs[i+7] * 500 
+                    angle = np.radians(-(u_env.car.angle + rel_angle))
+                    end_x = u_env.car.position.x + dist * np.cos(angle)
+                    end_y = u_env.car.position.y + dist * np.sin(angle)
+                    pygame.draw.line(screen, (255, 0, 0), u_env.car.position, (end_x, end_y), 1)
+
+                right_indicator = u_env.car.position + pygame.Vector2(0,5).rotate(-u_env.car.angle)
+                front_indicator = u_env.car.position + pygame.Vector2(10,0).rotate(-u_env.car.angle)
+                pygame.draw.line(screen, (0, 0, 0), u_env.car.position, (front_indicator.x, front_indicator.y), 2)
+                pygame.draw.line(screen, (0, 0, 0), u_env.car.position, (right_indicator.x, right_indicator.y), 2)
+
+                # crono
+                right_margin = WIDHT - 20
+                time_str = format_time(u_env.current_lap_time)
+                time_surface = font_main.render(f"TIEMPO: {time_str}", True, (255, 255, 255))
+                text_rect = time_surface.get_rect(topright=(right_margin, 20))
+                screen.blit(time_surface, text_rect)
+                for i, s_time in enumerate(u_env.sector_times):
+                    s_surface = font_main.render(f"S{i+1}: {format_time(s_time)}", True, (200, 200, 255))
+                    s_rect = s_surface.get_rect(topright=(right_margin, 50 + (i * 25)))
+                    screen.blit(s_surface, s_rect)
+
+                # obs y act
+                lbls = ["VLng", "VLat", "Algn", "CosF", "SinF", "SDFn", "Trck", "L-90", "L-45", "L-20", "L-10", "L_00", "R+10", "R+20", "R+45", "R+90"]
+                obs_lbl_str = "OBS: [ " + " ".join([f"{l:>5}" for l in lbls]) + " ]"
+                obs_val_str = "     [ " + " ".join([f"{v:>5.2f}" for v in obs]) + " ]"
+                lbl_surf = font_mono.render(obs_lbl_str, True, (180, 180, 180))
+                val_surf = font_mono.render(obs_val_str, True, (0, 255, 255))
+                screen.blit(lbl_surf, lbl_surf.get_rect(midbottom=(WIDHT//2, HEIGHT - 100)))
+                screen.blit(val_surf, val_surf.get_rect(midbottom=(WIDHT//2, HEIGHT - 80)))
+
+                act_y = HEIGHT - 60
+                act_names = ["THR", "REV", "LFT", "RGT", "BRK"]
+                act_str_width = font_mono.size("ACT:  ")[0] + sum([font_mono.size(f"[{a}] ")[0] for a in act_names])
+                act_x = (WIDHT - act_str_width) // 2
+                act_title = font_mono.render("ACT:  ", True, (255, 255, 255))
+                screen.blit(act_title, (act_x, act_y))
+                act_x += act_title.get_width()
+                for i, act_lbl in enumerate(act_names):
+                    color = (0, 255, 0) if action[i] else (70, 70, 70) # Verde si apretado, Gris oscuro si suelto
+                    surf = font_mono.render(f"[{act_lbl}] ", True, color)
+                    screen.blit(surf, (act_x, act_y))
+                    act_x += surf.get_width()
+
+                # lap
+                att_surface = font_main.render(f"Lap: {n_lap}", True, (150, 150, 150))
+                att_rect = att_surface.get_rect(topright=(right_margin, HEIGHT - 40))
+                screen.blit(att_surface, att_rect)
+
+                # Capturar el array de la pantalla
+                pygame.display.flip()
+                frame = pygame.surfarray.array3d(screen)
+                frame = np.transpose(frame, (1, 0, 2))  # Pygame usa (x, y, rgb), Imageio espera (y, x, rgb), por lo que transponemos.
+                frame = cv2.resize(frame, (WIDHT//2, HEIGHT//2)) # reducir resolución
+                current_frames.append(frame)
+
+            done = terminated or truncated
+            
+            # Meta
+            if info.get("is_lap_completed"):
+                lap_time = info["lap_time"]
+                if lap_time < best_time:
+                    best_time = lap_time
+                    best_telemetry = list(current_telemetry) 
+                    best_frames = list(current_frames)
+                    print(f"Nuevo Record, Lap: {n_lap}| Tiempo: {best_time:.3f}s")
+
+                current_telemetry.clear()
+                current_frames.clear()
+                n_lap += 1
+
+    if best_telemetry is not None:
+        font_big = pygame.font.SysFont("monospace", 40, bold=True)  # aviso
+        screen.fill((20, 20, 20))
+        msg = font_big.render("GUARDANDO MEJOR VUELTA...", True, (255, 215, 0))
+        screen.blit(msg, msg.get_rect(center=(WIDHT//2, HEIGHT//2)))
+        pygame.display.flip()
+        
+        csv_name = f"data/analysis/telemetry_{model_name}_{best_time:.2f}s.csv"
+        video_name = f"plots/lap_{model_name}_{best_time:.2f}s.mp4"
+        
+        pd.DataFrame(best_telemetry).to_csv(csv_name, index=False)
+        writer = imageio.get_writer(video_name, format="ffmpeg", mode="I", fps=fps)
+        for f in best_frames:
+            writer.append_data(f)
+        writer.close()
+        print(f"\nEscaneo completo. Archivos guardados:\n- {csv_name}\n- {video_name}")
+    else:
+        print("\nEl modelo no logró completar ninguna vuelta válida en los intentos dados.")
+    pygame.quit()
+
+    return best_time, best_telemetry
 
 ##########
 
@@ -354,87 +506,40 @@ def plot_test_track(all_telemetries, step=5, track_img = "assets/track_1-mask.pn
     plt.tight_layout()
     plt.show()
 
-def save_lap_gif(env, action_sequence, filename="plots/best_lap.gif", fps=25, seed=13):
-    "GIF de secuencia de acciones ya calculada sin evaluar la red neuronal."
-    frames = []
-    obs, _ = env.reset(seed=seed) 
-    os.environ['SDL_VIDEODRIVER'] = 'dummy'
-    pygame.init()
-    pygame.display.set_mode((1, 1), pygame.NOFRAME)
-    WIDTH, HEIGHT = 1080, 720
-    screen = pygame.Surface((WIDTH, HEIGHT))
-    track_img = pygame.image.load("assets/track_1-mask.png").convert_alpha()
-
-    print(f"Iniciando renderizado del GIF ({len(action_sequence)} pasos)...") 
-    try:
-        for i, action in enumerate(action_sequence):
-            obs, _, term, trunc, info = env.step(action)
-            screen.fill((30, 30, 30))
-            screen.blit(track_img, (0, 0))
-
-            car = env.car
-            pygame.draw.circle(screen, (255, 0, 0), (int(car.position.x), int(car.position.y)), 5)
-            lidar_angles = [-90, -45, -20, -10, 0, 10, 20, 45, 90]
-            for i, rel_angle in enumerate(lidar_angles):
-                dist = obs[i+7] * 500 
-                angle = np.radians(-(car.angle + rel_angle))
-                end = (car.position.x + dist * np.cos(angle), car.position.y + dist * np.sin(angle))
-                pygame.draw.line(screen, (255, 0, 0), car.position, end, 1)
-            right_indicator = car.position + pygame.Vector2(0,5).rotate(-car.angle)
-            front_indicator = car.position + pygame.Vector2(10,0).rotate(-car.angle)
-            pygame.draw.line(screen, (0, 0, 0), car.position, (front_indicator.x, front_indicator.y), 2)
-            pygame.draw.line(screen, (0, 0, 0), car.position, (right_indicator.x, right_indicator.y), 2)
-
-            if i % 1 == 0:
-                frame = pygame.surfarray.array3d(screen)
-                frames.append(np.transpose(frame, (1, 0, 2)))
-
-            if term or trunc: 
-                print(f"Simulación finalizada en paso {i} por colisión/fin.")
-                break 
-
-    finally: 
-        pygame.quit()
-            
-    if frames:
-        print(f"Guardando {len(frames)} frames en {filename}...")
-        imageio.mimsave(filename, frames, fps=fps, loop=0)
-        print("¡GIF guardado con éxito!")
-    else:
-        print("Error: No se generaron frames.")
-
 
 ## Plots ## 
 
 if __name__ == "__main__":
 
     # Gráficos de Entrenamiento #
-    # plot_learning_curve("data/logs/train1.progress.csv", "data/logs/progress_log.csv")
-    # plot_lap_times(["data/logs/best_laps_T2.csv", "data/logs/best_laps.csv"])
+    plot_learning_curve("data/logs/train1.progress.csv", "data/logs/progress_log.csv")
+    plot_lap_times(["data/logs/best_laps_T2.csv", "data/logs/best_laps.csv"])
     
     # Obtener telemetrías #
     from env import TrackEnv2
     env = TrackEnv2(track_mask="assets/track_1-mask.png")
-    # all_telems, best_actions, best_model_name = evaluate_models("data/models", env)  # generar las telemetrias
 
+    # generar las telemetrias
+    # all_telems, best_model_name = evaluate_models("data/models", env)  
+    # best_model_path = os.path.join("data/models/", best_model_name + ".zip")
+    # tiempo, best_telem = scan_best_lap(best_model_path, env, n_tries=10, fps = 50)  #x2
+
+    # cargarlas
     all_telems = pd.read_csv("data/analysis/all_telemetries.csv") # cargar el archivo
-    best_actions = np.load("data/analysis/best_actions.npy") 
-    best_model_name = all_telems["model_name"].unique()[-1]  # o elegir otro
-    # ppo_track_v5_960252_steps #
+    best_model_name = "ppo_T3"
+    best_telem = pd.read_csv(f"data/analysis/telemetry_{best_model_name}_51.60s.csv")
+
+    # modelos_disponibles = all_telems['model_name'].unique()
 
     # Gráficos de Telemetría #
-    # modelos_disponibles = all_telems['model_name'].unique()
-    best_telem = all_telems[all_telems['model_name'] == best_model_name]
 
-    # plot_telemetry_evol(all_telems, step=1)
-    # plot_telemetry_act(best_telem)
-    # plot_telemetry_vel(best_telem)
-    # plot_speed_profile(best_telem)
+    plot_telemetry_evol(all_telems, step=1)
+    plot_telemetry_act(best_telem)
+    plot_telemetry_vel(best_telem)
+    plot_speed_profile(best_telem)
     plot_test_track(all_telems, step = 5)
 
     plt.close("all")
-    # # # GIF de la mejor vuelta #
-    # if best_actions is not None:
-    #     save_lap_gif(env, best_actions)
+
         
 
