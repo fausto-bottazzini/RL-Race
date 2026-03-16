@@ -14,7 +14,10 @@ El núcleo del simulador está basado en la lógica de [Juego-Carrera](https://g
 * **Algoritmo PPO:** Implementación con **Stable Baselines3** para el manejo de espacios de acciones continuos.
 * **Telemetría de Datos:** Integración con **Matplotlib** para el análisis de rendimiento durante y despues del entrenamiento.
 
-![Telemetría de Carrera](plots/lap_ppo_T3_51.60s.mp4)
+<div align="center">
+  <video src="https://github.com/fausto-bottazzini/RL-Race/plots/lap_ppo_T3_51.60s.mp4" width="600" autoplay loop muted></video>
+  <p><i>Mejor vuelta obtenida. El entorno se configuró con dt = 1/25. </i></p>
+</div>
 
 ---
 ## Circuito y Auto
@@ -22,7 +25,7 @@ El circuito se encuentra en binario para poder manejar la logica de fuera de pis
 
 El auto cuenta con una velocidad punta, tanto hacia adelante como en reversa. Al igual que en el juego es un punto. Existe un drag constante y una fuerte resistencia fuera de pista y para las velocidades laterales (limitando el drift)
 
-![Telemetría de Carrera](plots/track.png)
+![Análisis del Circuito](plots/track.png)
 
 ## Entrenamiento
 El entrenamiento se llevó a cabo de forma paralela en varios nucleos de un procesador.
@@ -43,7 +46,7 @@ En el segundo entrenamiento (optimización) se da mas libertad en la forma de ma
 4. **Castigos varios (-):** No avanzar y accionar botones opuestos. 
 5. **Fuera de pista (-):** Mismo funcionamiento que en el primer entrenamietno. 
  
-> ![Curva de Aprendizaje](plots/T2.png) 
+> ![Monitoreo del Entrenamiento](plots/T2.png) 
 
 ### Observaciones
 El vector de estado que recibe el modelo incluye:
