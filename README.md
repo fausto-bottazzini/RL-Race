@@ -15,7 +15,8 @@ El núcleo del simulador está basado en la lógica de [Juego-Carrera](https://g
 * **Telemetría de Datos:** Integración con **Matplotlib** para el análisis de rendimiento durante y despues del entrenamiento.
 
 <div align="center">
-    <video src="https://github.com/fausto-bottazzini/RL-Race/raw/refs/heads/main/plots/lap_ppo_T3_51.60s.mp4" width="600" autoplay loop muted></video>
+    <video src="https://raw.githubusercontent.com/fausto-bottazzini/RL-Race/plots/lap_ppo_T3_51.60s.mp4" width="600" autoplay loop muted>
+    </video>
     <p><i>Mejor vuelta obtenida. El entorno se configuró con dt = 1/25. </i></p>
 </div>
 
