@@ -14,9 +14,9 @@ El núcleo del simulador está basado en la lógica de [Juego-Carrera](https://g
 * **Algoritmo PPO:** Implementación con **Stable Baselines3** para el manejo de espacios de acciones continuos.
 * **Telemetría de Datos:** Integración con **Matplotlib** para el análisis de rendimiento durante y despues del entrenamiento.
 
-
-https://github.com/user-attachments/assets/7c409e30-9e87-4b85-9c60-b8a4540b20d6
-
+<div align="center">
+ https://github.com/user-attachments/assets/7c409e30-9e87-4b85-9c60-b8a4540b20d6
+<div>
 ---
 ## Circuito y Auto
 El circuito se encuentra en binario para poder manejar la logica de fuera de pista. Se calculó una centerline a partír de un Signed Distance Field (SDF), parametrizada de forma continua, para poder calcular el progreso en fomra de arco.
@@ -110,7 +110,5 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
 4. **Entrenar nuevo agente:**
     ```bash
    python train.py
-
-    ```bash
    python training_monitoring.py
 
