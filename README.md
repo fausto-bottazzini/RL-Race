@@ -15,8 +15,8 @@ El núcleo del simulador está basado en la lógica de [Juego-Carrera](https://g
 * **Telemetría de Datos:** Integración con **Matplotlib** para el análisis de rendimiento durante y despues del entrenamiento.
 
 <div align="center">
-  <video src="https://github.com/fausto-bottazzini/RL-Race/plots/lap_ppo_T3_51.60s.mp4" width="600" autoplay loop muted></video>
-  <p><i>Mejor vuelta obtenida. El entorno se configuró con dt = 1/25. </i></p>
+    <video src="https://github.com/fausto-bottazzini/RL-Race/raw/refs/heads/main/plots/lap_ppo_T3_51.60s.mp4" width="600" autoplay loop muted></video>
+    <p><i>Mejor vuelta obtenida. El entorno se configuró con dt = 1/25. </i></p>
 </div>
 
 ---
@@ -77,9 +77,10 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
 
 ---
 
-## Mejór Resultado Obtenido
-![Trayectoria](plots/best_lap_traza.png)
-![Telemetría](plots/best_lap_telemetry.png)
+## Mejór Resultado Obtenido: 
+# Vuelta de 51.6 segundos. 
+![Trayectoria](plots/best_lap_traza.png {width=500px})
+![Telemetría](plots/best_lap_telemetry.png {width=500px})
 
 ## 🚀 Instalación y Ejecución
 
