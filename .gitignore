@@ -31,7 +31,7 @@ data/models/ppo_track_v*_steps.zip
 # Otros
 old/
 data/analysis/models_to_analyse/
-# data/analysis/
+data/analysis/*
 !data/analysis/all_telemetries.csv
 !data/analysis/telemetry_ppo_T2_52.52s.csv
 !data/analysis/telemetry_ppo_T3_51.60s.csv
