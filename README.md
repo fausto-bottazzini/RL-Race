@@ -77,7 +77,7 @@ Se utiliza **Matplotlib** para generar mapas de calor sobre la pista, permitiend
 ---
 
 ## Mejór Resultado Obtenido: 
-# Vuelta de 51.6 segundos. 
+### Vuelta de 51.6 segundos. 
 
 <div align="center">
   <img src="plots/best_lap_traza.png" width="700" alt="Trayectoria">
