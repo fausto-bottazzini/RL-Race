@@ -26,7 +26,9 @@ El auto cuenta con una velocidad máxima, tanto hacia adelante como en reversa. 
 ![Análisis del Circuito](plots/track.png)
 
 ## Entrenamiento
-El entrenamiento se llevó a cabo de forma paralela en varios nucleos de un procesador.
+El entrenamiento se llevó a cabo de forma paralela en varios nucleos de un procesador. En una primera etapa de acondicionamiento los intentos se iniciaban en posiciones aleatorias de la centerline para afrontar diferentes partes del circuito,
+para la segunda etapa, la optimización de los tiempos de vuelta, se tuvieron en cuenta tiempos y los sectores, comenzando siempre en la posición de largada.
+Para una transición suave entre ambas etapas se configuró una probabilidad de inicio aleatorio que decaia a medida que avanzaba el entrenamiento. 
 ### Función de Recompensa (Reward Function)
 El éxito del agente se define mediante una función de recompensa densa:
 
